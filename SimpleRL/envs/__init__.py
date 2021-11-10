@@ -1,5 +1,4 @@
-from base import environment_base
-
+from envs.base import environment_base
 
 # LASER TAG ENVIRONMENT
-from laser_tag import laser_tag
+from envs.laser_tag import laser_tag_env

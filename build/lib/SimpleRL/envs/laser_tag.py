@@ -9,10 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
-from envs.base import environment_base
+from base import environment_base
 from utils.laser_tag_utils import generate_scenario
 
-class laser_tag_env(environment_base):
+class laser_tag(environment_base):
     
     # TO DO: update the notation
     
@@ -211,7 +211,7 @@ class laser_tag_env(environment_base):
 if __name__ == "__main__":       
     
     # intialise the environment
-    env = laser_tag_env(render=True)
+    env = laser_tag(render=True)
     
     # reset the state
     state, done = env.reset(), False
