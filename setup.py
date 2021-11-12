@@ -8,7 +8,7 @@ Created on Mon Nov  1 14:47:03 2021
 
 from setuptools import setup, find_packages
 
-VERSION = '0.0.1' 
+VERSION = '0.0.2' 
 DESCRIPTION = 'SimpleRL'
 LONG_DESCRIPTION = 'A package containing several lightweight reinforcement learning environments'
 
