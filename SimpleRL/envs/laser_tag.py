@@ -9,8 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
-from envs.base import environment_base
-from utils.laser_tag_utils import generate_scenario
+from SimpleRL.envs.base import environment_base 
+from SimpleRL.utils.laser_tag_utils import generate_scenario
 
 class laser_tag_env(environment_base):
     
