@@ -14,12 +14,20 @@ from SimpleRL.utils.laser_tag_utils import generate_scenario
 
 class laser_tag_env(environment_base):
     
-    # TO DO: update the notation
+    # TODO: update the notation
+    # TODO: add code for adversary -> planning based method
     
-    def __init__(self, render=False, seed=None):
+    def __init__(self, render=False, seed=None, mode="default"):
+        
+        # Ensure the mode for the environment is valid
+        valid_mode = ["default", "adversarial"]
+        mode_error = "mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_mode)
+        assert mode in valid_mode, mode_error
         
         self.render = render 
         self.seed = seed 
+        self.mode = mode
         self.ACTION_DIM = 1 # how many actions are made each turn?
         self.ACTION_NUM = np.array([8], dtype=np.int32) # how many values are there per action?  
         
@@ -36,18 +44,11 @@ class laser_tag_env(environment_base):
         self.DISPLAY_PAUSE = 0.25
         
         # Initialise the environment
-        self.game_outcome = None # has the game been won by anyone?
         self.bullet_path = None # for displaying the bullets path
-        self.bullet_hits = None # for displaying succesful shots
-        self.current_player = self.PLAYER_PARAM # which player is in control?
-        self.opposing_player = self.ENEMY_PARAM # which player is not in control?
-        self.grid_map = generate_scenario(
-                GRID_SIZE = self.GRID_SIZE,
-                PLAYER_PARAM = self.PLAYER_PARAM,
-                ENEMY_PARAM = self.ENEMY_PARAM,
-                TERRAIN_PARAM = self.TERRAIN_PARAM,
-                EMPTY_PARAM = self.EMPTY_PARAM
-                )
+        self.bullet_hits = None # for displaying successful shots
+        
+        # Reset the environment parameters
+        self.reset()
         
         # Intialise the display
         if self.render: 
@@ -63,7 +64,7 @@ class laser_tag_env(environment_base):
                 GRID_SIZE = self.GRID_SIZE
                 )
         
-        return self.grid_map
+        return self.grid_map.flatten()
         
     def step(self, action=None):
         
@@ -149,7 +150,7 @@ class laser_tag_env(environment_base):
         if self.render:
             self.display()
                  
-        return self.grid_map, reward, done, info
+        return self.grid_map.flatten(), reward, done, info
     
     def init_display(self, grid_map):
         
