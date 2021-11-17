@@ -22,8 +22,9 @@ setup(
         long_description=LONG_DESCRIPTION,
         packages=find_packages(),
         install_requires=[
-            'matplotlib>=3.4.3', 
-            'numpy>=1.21.2'
+            'matplotlib==3.4.3', 
+            'numpy==1.21.4',
+            'setuptools==58.0.4'
             ],        
         keywords=['reinforcement learning', 'environment'],
         classifiers= [
