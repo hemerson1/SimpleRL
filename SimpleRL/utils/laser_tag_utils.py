@@ -54,3 +54,148 @@ def generate_scenario(GRID_SIZE=8, PLAYER_PARAM=1, ENEMY_PARAM=2, TERRAIN_PARAM=
     map_grid[terrain_pos[0, :], terrain_pos[1, :]] = TERRAIN_PARAM
     
     return map_grid        
+
+
+def shortest_path(grid, start, goal):
+    
+    # TODO: update documentation
+    # TODO: integrate with the environment
+    
+    # https://levelup.gitconnected.com/dijkstras-shortest-path-algorithm-in-a-grid-eb505eb3a290
+    
+    # get the dimensions of the grid
+    max_val = grid.shape[0]    
+    
+    # convert the grid to the correct format
+    processed_grid = np.copy(grid)
+    processed_grid[processed_grid == 3] = 999 # assign boulders = 999
+    processed_grid[processed_grid == 0] = 4 # assign empty spaces to be 4
+    processed_grid[processed_grid == 1] = 0 # assign player to be 0
+    processed_grid[processed_grid == 2] = 0 # assign computer to be 0
+    processed_grid[processed_grid == 4] = 1 # assign empty spaces to be 1  
+        
+    # Create arrays to store the distance, _ and visited
+    distmap = np.ones((max_val, max_val), dtype=int) * np.Infinity
+    originmap = np.ones((max_val, max_val), dtype=int) * np.nan
+    visited = np.zeros((max_val, max_val), dtype=bool)    
+    
+    # set starting and end position 
+    start_row, start_col = start
+    end_row, end_col = goal    
+    
+    # get the initialisation coords
+    row, col = start_row, start_col
+    
+    # Initialise the distance map to starting location
+    distmap[row, col] = 0
+    finished = False
+    count = 0
+    
+    # STEP 1: Loop Dijkstra until reaching the target cell
+    while not finished:
+        
+      # move to row + 1, col
+      if row < max_val - 1:
+          
+        # update the distance map to show the number of steps from the source
+        if (distmap[row + 1, col] > processed_grid[row + 1, col] + distmap[row, col]) and not (visited[row + 1, col]) and (grid[row + 1, col] != 3):
+          distmap[row + 1, col] = processed_grid[row + 1, col] + distmap[row, col]
+          
+          # if the array were a flat list what index would (row, col) correspond to for a shape (max_val, max_val)
+          originmap[row + 1, col] = np.ravel_multi_index([row, col], (max_val, max_val))
+          
+      # move to row - 1, col
+      if row > 0:
+          
+        # update the distance map to show the number of steps from the source
+        if (distmap[row - 1, col] > processed_grid[row - 1, col] + distmap[row, col]) and not (visited[row - 1, col]) and (grid[row - 1, col] != 3):
+          distmap[row - 1, col] = processed_grid[row - 1, col] + distmap[row, col]
+          
+          # if the array were a flat list what index would (row, col) correspond to for a shape (max_val, max_val)
+          originmap[row - 1, col] = np.ravel_multi_index([row, col], (max_val, max_val))
+          
+      # move to row, col + 1
+      if col < max_val - 1:
+          
+        # update the distance map to show the number of steps from the source
+        if (distmap[row, col + 1] > processed_grid[row, col + 1] + distmap[row, col]) and not (visited[row, col + 1]) and (grid[row, col + 1] != 3):
+          distmap[row, col + 1] = processed_grid[row, col + 1] + distmap[row, col]
+          
+          # if the array were a flat list what index would (row, col) correspond to for a shape (max_val, max_val)
+          originmap[row, col + 1] = np.ravel_multi_index([row, col], (max_val, max_val))
+          
+      # move to row, col - 1
+      if col > 0:
+          
+        # update the distance map to show the number of steps from the source
+        if (distmap[row, col - 1] > processed_grid[row, col - 1] + distmap[row, col]) and not (visited[row, col - 1]) and (grid[row, col - 1] != 3):
+          distmap[row, col - 1] = processed_grid[row, col - 1] + distmap[row, col]
+          
+          # if the array were a flat list what index would (row, col) correspond to for a shape (max_val, max_val)
+          originmap[row, col - 1] = np.ravel_multi_index([row, col], (max_val, max_val))
+          
+      # set this index to visited
+      visited[row, col] = True
+      
+      # set the visited locations to infinity in the distance map
+      dismaptemp = distmap
+      dismaptemp[np.where(visited)] =  np.Infinity
+      
+      # now we find the shortest path so far      
+      
+      # if the array were a flat array what index would np.argmin(dismaptemp) correspond to for a shape np.shape(dismaptemp)
+      # as argmin returns the position in a flat array
+      minpost = np.unravel_index(np.argmin(dismaptemp), np.shape(dismaptemp))
+      
+      #print(minpost)
+      
+      # set the coordinates as the current point with the shortest distance
+      row, col = minpost[0], minpost[1]
+      
+      # Terminate if algorithm has reached the goal
+      if row == end_row and col == end_col:
+        finished = True
+                
+      count = count + 1    
+                
+    # STEP 2: Start backtracking to plot the path
+    
+    # initialise the temporary array
+    mattemp = processed_grid.astype(float)
+    row, col = end_row, end_col
+    path = []
+    
+    # set the end point to NaN
+    mattemp[int(row), int(col)] = np.nan
+    
+    # run until back to the original position
+    while row != start_row or col != start_col :
+    
+      # add coords to the path
+      path.append([int(row), int(col)])      
+      
+      # follow the originmap to the previous position
+      rowrowcolcol = np.unravel_index(int(originmap[int(row), int(col)]), (max_val, max_val))
+      
+      # set row, col to prev_row, prev_col      
+      row, col = rowrowcolcol[0], rowrowcolcol[1]
+      
+      # Nan current position
+      mattemp[int(row), int(col)] = np.nan
+      
+    path.append([int(row), int(col)])
+    
+    return path
+
+if __name__ == "__main__":
+    
+    np.random.seed(0)
+    
+    grid = generate_scenario()
+    
+    start = np.asarray(np.where(grid == 1)).flatten() 
+    goal = np.asarray(np.where(grid == 2)).flatten()  
+    
+    shortest_path(grid, start, goal)
+
+

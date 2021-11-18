@@ -16,7 +16,6 @@ class laser_tag_env(environment_base):
     
     # TODO: update the notation
     # TODO: add code for adversary -> planning based method
-    # TODO: add option to make move and then shoot
     
     def __init__(self, render=False, seed=None, mode="default"):
         
@@ -134,21 +133,19 @@ class laser_tag_env(environment_base):
             chosen_move = move_direction[move_action[0] - 1, :]
             
             # get the grid value of the move           
-            final_player_pos = player_pos + chosen_move      
+            final_player_pos = player_pos + chosen_move   
+                        
+            valid_move = self.is_move_valid(final_player_pos)
             
-            # assign the new player position
-            row, col = final_player_pos          
-            
-            # check the square is within the grid
-            if (row >= 0 and row < self.GRID_SIZE) and (col >= 0 and col < self.GRID_SIZE):
-            
-                # check the square is empty
-                if self.grid_map[row, col] == 0:
-                    self.grid_map[row, col] = self.current_player
-                    self.grid_map[player_pos[0], player_pos[1]] = 0
-                    
-                    # update the player position for the shot
-                    player_pos = final_player_pos
+            # Update the grid if the move is valid
+            if valid_move:
+                
+                # assign players to correct square
+                self.grid_map[final_player_pos[0], final_player_pos[1]] = self.current_player
+                self.grid_map[player_pos[0], player_pos[1]] = 0
+                
+                # update the player position for the shot
+                player_pos = final_player_pos            
                 
         # if the action is a shot
         if shot_action > 0:
@@ -157,7 +154,7 @@ class laser_tag_env(environment_base):
             chosen_move = move_direction[shot_action[0] - 1, :]
             
             # get the outcome of the shot
-            reward, done, info = self.get_shot_trajectory(chosen_move, player_pos)
+            reward, done, info = self.get_shot_trajectory(chosen_move, player_pos, self.grid_map)
                                 
         # switch the current player to the opposite player 
         temp_opposing_player = self.opposing_player 
@@ -166,7 +163,7 @@ class laser_tag_env(environment_base):
         
         return reward, done, info    
     
-    def get_shot_trajectory(self, chosen_move, current_player_pos):
+    def get_shot_trajectory(self, chosen_move, current_player_pos, grid_map):
         
         # the default outcomes
         reward, done, info = 0, False, {"outcome" : None}  
@@ -183,14 +180,14 @@ class laser_tag_env(environment_base):
                 break
             
             # has the bullet hit terrain?
-            if self.grid_map[row, col] == 3:
+            if grid_map[row, col] == 3:
                 break
             
             # has the bullet hit the enemy?
-            if self.grid_map[row, col] == self.opposing_player:      
+            if grid_map[row, col] == self.opposing_player:      
                 
                 # remove the enemy
-                self.grid_map[row, col] = 0
+                grid_map[row, col] = 0
                 self.bullet_hits = np.append(self.bullet_hits, bullet_pos.reshape(1, -1), axis=0)
                 
                 # set the parameters to end the game
@@ -203,7 +200,20 @@ class laser_tag_env(environment_base):
             self.bullet_path = np.append(self.bullet_path, bullet_pos.reshape(1, -1), axis=0)
             
         return reward, done, info
+    
+    def is_move_valid(self, final_player_pos, grid_map):   
         
+        # assign the new player position
+        row, col = final_player_pos          
+        
+        # check the square is within the grid
+        if (row >= 0 and row < self.GRID_SIZE) and (col >= 0 and col < self.GRID_SIZE):
+        
+            # check the square is empty
+            if grid_map[row, col] == 0:
+                return True
+                
+        return False     
     
     def get_computer_action(self):
         
@@ -215,27 +225,105 @@ class laser_tag_env(environment_base):
         player_pos =  np.asarray(np.where(self.grid_map == self.opposing_player)).flatten()    
         
         # get the possible shot direction
-        shot_directions = np.array([[0, -1], [-1, 0], [0, 1], [1, 0]])
+        directions = np.array([[0, -1], [-1, 0], [0, 1], [1, 0]])
         
         # STEP 1: Check if a shot is possible
         
-        # cycle through the possible directions
-        for direction in range(shot_directions.shape[0]):
+        # cycle through possible shots
+        for shot_direction in range(directions.shape[0]):
             
             #  check if the game could conclude with a shot            
-            _, done, _ = self.get_shot_trajectory(shot_directions[direction, :], computer_pos)
+            _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map)
             
             # select the concluding action
             if done: 
                 move_action = 0 
-                shot_action = direction + 1
+                shot_action = shot_direction + 1
                 return np.array([move_action + shot_action * 5], dtype=np.int32)
             
         # STEP 2: Check if a step shot is possible
         
+        valid_computer_moves = []
+        
+        # cycle through possible moves
+        for move_direction in range(directions.shape[0]):
+            
+            # get the possible moves
+            chosen_move = directions[move_direction, :]        
+            final_computer_pos =  computer_pos  + chosen_move
+            
+            # Check if the move is valid
+            valid_move = self.is_move_valid(final_computer_pos, self.grid_map)
+            
+            #  check if the game could conclude with a move-shot  
+            if valid_move:
+                
+                valid_computer_moves.append(chosen_move)
+                
+                for shot_direction in range(directions.shape[0]):
+                    _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos)
+                    
+                    # select the concluding action
+                    if done: 
+                        move_action = move_direction + 1 
+                        shot_action = shot_direction + 1
+                        return np.array([move_action + shot_action * 5], dtype=np.int32)
+                    
         # STEP 3: Check if any moves would result in the possibility of an enemy step shot
         
+        # only cycle through valid moves
+        valid_computer_moves = np.array(valid_computer_moves, dtype=np.int32)
+        
+        # initialise the safe computer moves
+        safe_computer_moves = []
+        
+        # cycle through current player moves
+        for computer_move_direction in range(valid_computer_moves.shape[0]):
+            
+            computer_move_safe = True
+            
+            # get the possible moves
+            comp_chosen_move = directions[computer_move_direction, :]        
+            final_computer_pos =  computer_pos + comp_chosen_move
+            
+            # update a temporary grid
+            temp_grid_map = self.grid_map            
+            temp_grid_map[final_computer_pos[0], final_computer_pos[1]] = self.current_player
+            temp_grid_map[computer_pos[0], computer_pos[1]] = 0            
+            
+            # cycle through the player moves                            
+            for player_move_direction in range(directions.shape[0]):
+                
+                # get the possible moves
+                play_chosen_move = directions[player_move_direction, :]        
+                final_player_pos =  player_pos + play_chosen_move
+                
+                # Check if the move is valid
+                valid_player_move = self.is_move_valid(final_player_pos, temp_grid_map)
+                
+                if valid_player_move:
+                    
+                    # cycle through player shots
+                    for player_shot_direction in range(directions.shape[0]):
+                        
+                        #  check if the game could conclude with a shot            
+                        _, done, _ = self.get_shot_trajectory(directions[player_shot_direction, :], final_player_pos, temp_grid_map)
+                        
+                        # mark this computer move as unsafes
+                        if done: 
+                            computer_move_safe = False
+                            break
+                        
+                if not computer_move_safe:                    
+                    break
+                
+            # update the safe moves
+            if computer_move_safe:
+                safe_computer_moves.append(comp_chosen_move)        
+        
         # STEP 4: Take the shortest path to the player excluding those that would result in a step shot
+        
+        safe_computer_moves = np.array(safe_computer_moves, np.int32)
             
         return np.random.randint(7, size=(1,))
             
