@@ -189,13 +189,22 @@ def shortest_path(grid, start, goal):
 
 if __name__ == "__main__":
     
+    # seed the environment
     np.random.seed(0)
     
+    # generate the grid
     grid = generate_scenario()
     
+    # create an additional obstacle
+    grid[0, 1] = 3    
+    
+    print(grid)
+    
+    # get the start and end
     start = np.asarray(np.where(grid == 1)).flatten() 
     goal = np.asarray(np.where(grid == 2)).flatten()  
     
-    shortest_path(grid, start, goal)
+    # calculate shortest path
+    path = shortest_path(grid, start, goal)
 
-
+    print(path)

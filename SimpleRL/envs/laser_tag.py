@@ -10,12 +10,16 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 
 from SimpleRL.envs.base import environment_base 
-from SimpleRL.utils.laser_tag_utils import generate_scenario
+from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 
 class laser_tag_env(environment_base):
     
     # TODO: update the notation
     # TODO: add code for adversary -> planning based method
+    
+    # T0DO: fix bug causing algorithm to freeze
+    #       seems to occur when there is no path to the opposing player
+    #       i.e. the one block between you and them is unsafe
     
     def __init__(self, render=False, seed=None, mode="default"):
         
@@ -82,15 +86,15 @@ class laser_tag_env(environment_base):
         if not done:
         
             if self.mode == "default":
-                computer_action = self.get_computer_action()
+                computer_action = self.get_computer_action()                
                 reward, done, info = self.update_grid(action=computer_action)
                 
             elif self.mode == "adversarial":
                 
                 #TODO: add adversarial implementation in which two seperate agents can
                 #      be trained                
-                pass      
-            
+                pass  
+                        
         # display the map
         if self.render:
             self.display()
@@ -135,7 +139,7 @@ class laser_tag_env(environment_base):
             # get the grid value of the move           
             final_player_pos = player_pos + chosen_move   
                         
-            valid_move = self.is_move_valid(final_player_pos)
+            valid_move = self.is_move_valid(final_player_pos, self.grid_map)
             
             # Update the grid if the move is valid
             if valid_move:
@@ -154,16 +158,32 @@ class laser_tag_env(environment_base):
             chosen_move = move_direction[shot_action[0] - 1, :]
             
             # get the outcome of the shot
-            reward, done, info = self.get_shot_trajectory(chosen_move, player_pos, self.grid_map)
-                                
+            reward, done, info = self.get_shot_trajectory(chosen_move, player_pos, self.grid_map, self.current_player)
+            
+            # if the player has been shot remove them
+            if done:
+                
+                # get the enemy position
+                enemy_pos = np.asarray(np.where(self.grid_map == self.opposing_player)).flatten() 
+                
+                # remove the enemy and update the display
+                self.grid_map[enemy_pos[0], enemy_pos[1]] = 0
+                self.bullet_hits = np.append(self.bullet_hits, enemy_pos.reshape(1, -1), axis=0)
+                                                
         # switch the current player to the opposite player 
         temp_opposing_player = self.opposing_player 
         self.opposing_player = self.current_player
         self.current_player = temp_opposing_player
-        
+                
         return reward, done, info    
     
-    def get_shot_trajectory(self, chosen_move, current_player_pos, grid_map):
+    def get_shot_trajectory(self, chosen_move, current_player_pos, grid_map, current_player):
+                
+        # get the player value
+        if current_player == 1:
+            opposing_player = 2
+        else:
+            opposing_player = 1
         
         # the default outcomes
         reward, done, info = 0, False, {"outcome" : None}  
@@ -184,16 +204,12 @@ class laser_tag_env(environment_base):
                 break
             
             # has the bullet hit the enemy?
-            if grid_map[row, col] == self.opposing_player:      
-                
-                # remove the enemy
-                grid_map[row, col] = 0
-                self.bullet_hits = np.append(self.bullet_hits, bullet_pos.reshape(1, -1), axis=0)
+            if grid_map[row, col] == opposing_player: 
                 
                 # set the parameters to end the game
                 reward = self.POSITIVE_REWARD
                 done = True
-                info["outcome"] = self.current_player
+                info["outcome"] = current_player
                 break
             
             # add the bullet path to the array for displaying
@@ -225,6 +241,7 @@ class laser_tag_env(environment_base):
         player_pos =  np.asarray(np.where(self.grid_map == self.opposing_player)).flatten()    
         
         # get the possible shot direction
+        # left, up, right, down
         directions = np.array([[0, -1], [-1, 0], [0, 1], [1, 0]])
         
         # STEP 1: Check if a shot is possible
@@ -233,14 +250,14 @@ class laser_tag_env(environment_base):
         for shot_direction in range(directions.shape[0]):
             
             #  check if the game could conclude with a shot            
-            _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map)
+            _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map, self.current_player)
             
             # select the concluding action
-            if done: 
+            if done:                 
                 move_action = 0 
                 shot_action = shot_direction + 1
                 return np.array([move_action + shot_action * 5], dtype=np.int32)
-            
+
         # STEP 2: Check if a step shot is possible
         
         valid_computer_moves = []
@@ -250,7 +267,7 @@ class laser_tag_env(environment_base):
             
             # get the possible moves
             chosen_move = directions[move_direction, :]        
-            final_computer_pos =  computer_pos  + chosen_move
+            final_computer_pos =  computer_pos + chosen_move
             
             # Check if the move is valid
             valid_move = self.is_move_valid(final_computer_pos, self.grid_map)
@@ -260,8 +277,13 @@ class laser_tag_env(environment_base):
                 
                 valid_computer_moves.append(chosen_move)
                 
+                # update a temporary grid
+                temp_grid_map = np.copy(self.grid_map)
+                temp_grid_map[final_computer_pos[0], final_computer_pos[1]] = self.current_player
+                temp_grid_map[computer_pos[0], computer_pos[1]] = 0   
+                
                 for shot_direction in range(directions.shape[0]):
-                    _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos)
+                    _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], final_computer_pos, temp_grid_map, self.current_player)
                     
                     # select the concluding action
                     if done: 
@@ -275,7 +297,7 @@ class laser_tag_env(environment_base):
         valid_computer_moves = np.array(valid_computer_moves, dtype=np.int32)
         
         # initialise the safe computer moves
-        safe_computer_moves = []
+        unsafe_computer_moves = []
         
         # cycle through current player moves
         for computer_move_direction in range(valid_computer_moves.shape[0]):
@@ -283,13 +305,16 @@ class laser_tag_env(environment_base):
             computer_move_safe = True
             
             # get the possible moves
-            comp_chosen_move = directions[computer_move_direction, :]        
-            final_computer_pos =  computer_pos + comp_chosen_move
+            comp_chosen_move = valid_computer_moves[computer_move_direction, :]                
+            final_computer_pos = computer_pos + comp_chosen_move
             
             # update a temporary grid
-            temp_grid_map = self.grid_map            
+            temp_grid_map = np.copy(self.grid_map)
             temp_grid_map[final_computer_pos[0], final_computer_pos[1]] = self.current_player
-            temp_grid_map[computer_pos[0], computer_pos[1]] = 0            
+            temp_grid_map[computer_pos[0], computer_pos[1]] = 0   
+            
+            # update temp player
+            temp_player = self.opposing_player
             
             # cycle through the player moves                            
             for player_move_direction in range(directions.shape[0]):
@@ -303,29 +328,53 @@ class laser_tag_env(environment_base):
                 
                 if valid_player_move:
                     
+                    # update the temporary grid again
+                    player_temp_grid_map = np.copy(temp_grid_map)
+                    player_temp_grid_map[final_player_pos[0], final_player_pos[1]] = temp_player
+                    player_temp_grid_map[player_pos[0], player_pos[1]] = 0   
+                    
                     # cycle through player shots
                     for player_shot_direction in range(directions.shape[0]):
                         
                         #  check if the game could conclude with a shot            
-                        _, done, _ = self.get_shot_trajectory(directions[player_shot_direction, :], final_player_pos, temp_grid_map)
+                        _, done, _ = self.get_shot_trajectory(directions[player_shot_direction, :], final_player_pos, player_temp_grid_map, temp_player)
                         
                         # mark this computer move as unsafes
-                        if done: 
+                        if done:              
                             computer_move_safe = False
+                            unsafe_computer_moves.append(comp_chosen_move)
                             break
                         
                 if not computer_move_safe:                    
                     break
                 
-            # update the safe moves
-            if computer_move_safe:
-                safe_computer_moves.append(comp_chosen_move)        
+        # STEP 4: Take the shortest path to the player excluding those that would result in a step shot from opponent
         
-        # STEP 4: Take the shortest path to the player excluding those that would result in a step shot
+        unsafe_computer_moves = np.array(unsafe_computer_moves, np.int32)
         
-        safe_computer_moves = np.array(safe_computer_moves, np.int32)
+        # if there are no safe actions take a random move
+        if unsafe_computer_moves.shape[0] == 4:
+            return np.random.randint(4, size=(1,)) + 1
+                    
+        # Remove the dangerous moves from the scope of the search algorithm
+        temp_grid_map = np.copy(self.grid_map)
+        for moves in range(unsafe_computer_moves.shape[0]):
             
-        return np.random.randint(7, size=(1,))
+            # get the possible moves
+            chosen_move = unsafe_computer_moves[moves, :]        
+            final_computer_pos = computer_pos  + chosen_move
+            
+            # Block out the dangerous move from the search
+            temp_grid_map[final_computer_pos[0], final_computer_pos[1]] = 3
+        
+        # get the shortest path
+        path = shortest_path(temp_grid_map, start=computer_pos, goal=player_pos)
+        
+        # get the selected move
+        selected_move = np.array(path[-2], dtype=np.int32) - computer_pos        
+        selected_action = np.where(np.all(directions == selected_move, axis=1))[0] + 1        
+         
+        return selected_action
             
     def init_display(self, grid_map):
         
