@@ -8,7 +8,7 @@ Created on Sun Oct 31 22:12:23 2021
 
 import numpy as np
 
-def generate_scenario(GRID_SIZE=8, PLAYER_PARAM=1, ENEMY_PARAM=2, TERRAIN_PARAM=3, EMPTY_PARAM=0): 
+def generate_scenario(grid_size=8, player_param=1, enemy_param=2, terrain_param=3, empty_param=0): 
     
     # TODO: update the parameter information to be consistent with the style  
     
@@ -17,7 +17,7 @@ def generate_scenario(GRID_SIZE=8, PLAYER_PARAM=1, ENEMY_PARAM=2, TERRAIN_PARAM=
     
     Parameters:
     ----------
-    GRID_SIZE
+    grid_size
         how large a grid should the game be set in
         
     Return:
@@ -27,31 +27,31 @@ def generate_scenario(GRID_SIZE=8, PLAYER_PARAM=1, ENEMY_PARAM=2, TERRAIN_PARAM=
          and terrain obstacles         
     """
     
-    PERCENT_TERRAIN = 0.3 # what is the percentage coverage of the grid with terrain
+    percent_terrain = 0.3 # what is the percentage coverage of the grid with terrain
    
     # generate a numbered grid and get an array of the edge elements
-    array_grid = np.arange(GRID_SIZE * GRID_SIZE).reshape(GRID_SIZE, GRID_SIZE)
+    array_grid = np.arange(grid_size * grid_size).reshape(grid_size, grid_size)
     array_edges = np.concatenate([array_grid[0,:-1], array_grid[:-1,-1], array_grid[-1,::-1], array_grid[-2:0:-1,0]])
     
     # randomly select an edge element and assign position to player and opposite position to enemys
     start_num = array_edges[np.random.choice(len(array_edges), size=1, replace=False)]
-    player_pos = np.array([start_num[0] / GRID_SIZE, start_num[0] % GRID_SIZE], dtype=np.int32)
-    enemy_pos = np.absolute(player_pos - np.array([GRID_SIZE - 1, GRID_SIZE - 1]))
+    player_pos = np.array([start_num[0] / grid_size, start_num[0] % grid_size], dtype=np.int32)
+    enemy_pos = np.absolute(player_pos - np.array([grid_size - 1, grid_size - 1]))
     
     # get the positions which are not at the edge and make PERCENT_TERRAIN of tiles terrain
     array_centre = np.setdiff1d(array_grid.flatten(), array_edges)
-    num_terrain_squares = int(len(array_centre) * PERCENT_TERRAIN)
+    num_terrain_squares = int(len(array_centre) * percent_terrain)
     terrain_squares = array_centre[np.random.choice(len(array_centre), size=num_terrain_squares, replace=False)]
     
-    get_pos = lambda x: np.array([x/GRID_SIZE, x % GRID_SIZE], dtype=np.int32)
+    get_pos = lambda x: np.array([x/grid_size, x % grid_size], dtype=np.int32)
     terrain_pos = get_pos(terrain_squares)
     
     # create a grid and assign numbers representing player, enemy and terrain
     # 0, 1, 2, 3 = vacant, player, enemy, terrain
-    map_grid = np.zeros((GRID_SIZE, GRID_SIZE), dtype=np.int32)
-    map_grid[player_pos[0], player_pos[1]] = PLAYER_PARAM
-    map_grid[enemy_pos[0], enemy_pos[1]] = ENEMY_PARAM
-    map_grid[terrain_pos[0, :], terrain_pos[1, :]] = TERRAIN_PARAM
+    map_grid = np.ones((grid_size, grid_size), dtype=np.int32) * empty_param
+    map_grid[player_pos[0], player_pos[1]] = player_param
+    map_grid[enemy_pos[0], enemy_pos[1]] = enemy_param
+    map_grid[terrain_pos[0, :], terrain_pos[1, :]] = terrain_param
     
     return map_grid        
 
@@ -146,8 +146,6 @@ def shortest_path(grid, start, goal):
       # if the array were a flat array what index would np.argmin(dismaptemp) correspond to for a shape np.shape(dismaptemp)
       # as argmin returns the position in a flat array
       minpost = np.unravel_index(np.argmin(dismaptemp), np.shape(dismaptemp))
-      
-      #print(minpost)
       
       # set the coordinates as the current point with the shortest distance
       row, col = minpost[0], minpost[1]

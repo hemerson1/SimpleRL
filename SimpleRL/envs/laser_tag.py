@@ -15,37 +15,52 @@ from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 class laser_tag_env(environment_base):
     
     # TODO: update the notation
-    # TODO: add code for adversary -> planning based method
+    # TODO: remove inefficiency in the code
+    # TODO: add code for adversary 
     
-    # T0DO: fix bug causing algorithm to freeze
-    #       seems to occur when there is no path to the opposing player
-    #       i.e. the one block between you and them is unsafe
-    
-    def __init__(self, render=False, seed=None, mode="default"):
+    def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", lives=1):
         
-        # Ensure the mode for the environment is valid
-        valid_mode = ["default", "adversarial"]
-        mode_error = "mode is not valid for this environment, " \
-            + "please select one of the following {} ".format(valid_mode)
-        assert mode in valid_mode, mode_error
+        # Get assertion errors
+        
+        # Ensure the enemy mode for the environment is valid
+        valid_action_mode = ["default", "single"]
+        action_mode_error = "action_mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_action_mode)
+        assert action_mode in valid_action_mode, action_mode_error
+        
+        # Ensure the enemy mode for the environment is valid
+        valid_enemy_mode = ["default", "adversarial"]
+        enemy_mode_error = "enemy_mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_enemy_mode)
+        assert enemy_mode in valid_enemy_mode, enemy_mode_error
         
         self.render = render 
         self.seed = seed 
-        self.mode = mode
-        self.ACTION_DIM = 1 # how many actions are made each turn?
-        self.ACTION_NUM = np.array([25], dtype=np.int32) # how many values are there per action?  
+        self.enemy_mode = enemy_mode
+        self.action_mode = action_mode
+        self.lives = lives
+        
+        # create a 1D action space
+        if self.action_mode == "single":
+            self.action_dim = 1 # how many actions are made each turn?
+            self.action_num = np.array([25], dtype=np.int32) # how many values are there per action?  
+         
+        # create the default multi-dimensional action space
+        elif self.action_mode == "default":
+            self.action_dim = 2
+            self.action_num = np.array([5, 5], dtype=np.int32) 
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
-        self.SHOT_RANGE = 5 # how many squares will a bullet travel?
-        self.GRID_SIZE= 8
-        self.POSITIVE_REWARD = +1
-        self.NEGATIVE_REWARD = -1
-        self.PLAYER_PARAM = 1
-        self.ENEMY_PARAM = 2
-        self.TERRAIN_PARAM = 3
-        self.EMPTY_PARAM = 0
-        self.DISPLAY_PAUSE = 0.25
+        self.shot_range = 5 # how many squares will a bullet travel?
+        self.grid_size = 8
+        self.positive_reward = +1
+        self.negative_reward = -1
+        self.player_param = 1
+        self.enemy_param = 2
+        self.terrain_param = 3
+        self.empty_param = 0
+        self.display_pause = 0.25
         
         # Initialise the environment
         self.bullet_path = None # for displaying the bullets path
@@ -61,11 +76,14 @@ class laser_tag_env(environment_base):
     def reset(self):
         
         # reset the map parameters
-        self.current_player = self.PLAYER_PARAM
-        self.opposing_player = self.ENEMY_PARAM
+        self.current_player = self.player_param
+        self.player_lives = self.lives
+        self.opposing_player = self.enemy_param
+        self.enemy_lives = self.lives
+        
         self.game_outcome = None
         self.grid_map = generate_scenario(
-                GRID_SIZE = self.GRID_SIZE
+                grid_size = self.grid_size
                 )
         
         return self.grid_map.flatten()
@@ -73,7 +91,7 @@ class laser_tag_env(environment_base):
     def step(self, player_action=None):
         
         # check the action input is valid (i.e. np.int32 of valid range)        
-        self.check_discrete_input(player_action)        
+        self.check_discrete_input(player_action)  
         
         # update the grid according to the player move
         reward, done, info = self.update_grid(action=player_action)
@@ -85,11 +103,11 @@ class laser_tag_env(environment_base):
         # check if the episode has terminated
         if not done:
         
-            if self.mode == "default":
-                computer_action = self.get_computer_action()                
-                reward, done, info = self.update_grid(action=computer_action)
+            if self.enemy_mode == "default":
+                computer_action = self.get_computer_action()                  
+                reward, done, info = self.update_grid(action=computer_action)       
                 
-            elif self.mode == "adversarial":
+            elif self.enemy_mode == "adversarial":
                 
                 #TODO: add adversarial implementation in which two seperate agents can
                 #      be trained                
@@ -101,9 +119,10 @@ class laser_tag_env(environment_base):
                  
         return self.grid_map.flatten(), reward, done, info
     
+    def sample_discrete_action(self):
+        return np.random.randint(self.action_num - 1, size=self.action_dim)
+    
     def update_grid(self, action):
-        
-        # TODO: add compatibility for multi-discrete action agents
         
         # 25 actions --------        
         #      NO|LM|UM|RM|DM
@@ -115,10 +134,15 @@ class laser_tag_env(environment_base):
         # -------------------
         
         # 0, 1, 2, 3, 4 = no_move, move_left, move_up, move_right, move_down
-        move_action = action % 5
-        
         # 0, 1, 2, 3, 4 = no_shot, shoot_left, shoot_up, shoot_right, shoot_down
-        shot_action = np.floor_divide(action, 5)
+              
+        if self.action_mode == "single":
+            move_action = action % 5        
+            shot_action = np.floor_divide(action, 5)
+        
+        elif self.action_mode == "default":
+            move_action = action[0].reshape(1,)
+            shot_action = action[1].reshape(1,)
         
         move_direction = np.array([[0, -1], [-1, 0], [0, 1], [1, 0]])
         reward, done, info = 0, False, {"outcome" : None}    
@@ -163,12 +187,25 @@ class laser_tag_env(environment_base):
             # if the player has been shot remove them
             if done:
                 
-                # get the enemy position
-                enemy_pos = np.asarray(np.where(self.grid_map == self.opposing_player)).flatten() 
+                done = False
                 
-                # remove the enemy and update the display
-                self.grid_map[enemy_pos[0], enemy_pos[1]] = 0
-                self.bullet_hits = np.append(self.bullet_hits, enemy_pos.reshape(1, -1), axis=0)
+                # update the lives
+                if self.current_player == self.player_param:
+                    self.enemy_lives -= 1            
+                else:
+                    self.player_lives -= 1
+                
+                # end the game when lives have run out
+                if self.player_lives == 0 or self.enemy_lives == 0:                
+                
+                    # get the enemy position
+                    enemy_pos = np.asarray(np.where(self.grid_map == self.opposing_player)).flatten() 
+                    
+                    # remove the enemy and update the display
+                    self.grid_map[enemy_pos[0], enemy_pos[1]] = 0
+                    self.bullet_hits = np.append(self.bullet_hits, enemy_pos.reshape(1, -1), axis=0)
+                    
+                    done = True
                                                 
         # switch the current player to the opposite player 
         temp_opposing_player = self.opposing_player 
@@ -180,15 +217,15 @@ class laser_tag_env(environment_base):
     def get_shot_trajectory(self, chosen_move, current_player_pos, grid_map, current_player):
                 
         # get the player value
-        if current_player == 1:
-            opposing_player = 2
+        if current_player == self.player_param:
+            opposing_player = self.enemy_param
         else:
-            opposing_player = 1
+            opposing_player = self.player_param
         
         # the default outcomes
         reward, done, info = 0, False, {"outcome" : None}  
         
-        for i in range(self.SHOT_RANGE):
+        for i in range(self.shot_range):
             
             # get the current bullet position
             bullet_vec = chosen_move * (i + 1)
@@ -196,18 +233,18 @@ class laser_tag_env(environment_base):
             row, col = bullet_pos
             
             # is the bullet out of bounds?
-            if (row < 0 or row >= self.GRID_SIZE) or (col < 0 or col >= self.GRID_SIZE):
+            if (row < 0 or row >= self.grid_size) or (col < 0 or col >= self.grid_size):
                 break
             
             # has the bullet hit terrain?
-            if grid_map[row, col] == 3:
+            if grid_map[row, col] == self.terrain_param:
                 break
             
             # has the bullet hit the enemy?
             if grid_map[row, col] == opposing_player: 
                 
                 # set the parameters to end the game
-                reward = self.POSITIVE_REWARD
+                reward = self.positive_reward
                 done = True
                 info["outcome"] = current_player
                 break
@@ -223,7 +260,7 @@ class laser_tag_env(environment_base):
         row, col = final_player_pos          
         
         # check the square is within the grid
-        if (row >= 0 and row < self.GRID_SIZE) and (col >= 0 and col < self.GRID_SIZE):
+        if (row >= 0 and row < self.grid_size) and (col >= 0 and col < self.grid_size):
         
             # check the square is empty
             if grid_map[row, col] == 0:
@@ -253,11 +290,17 @@ class laser_tag_env(environment_base):
             _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map, self.current_player)
             
             # select the concluding action
-            if done:                 
+            if done: 
+                
                 move_action = 0 
                 shot_action = shot_direction + 1
-                return np.array([move_action + shot_action * 5], dtype=np.int32)
-
+                
+                if self.action_mode == "single":
+                    return np.array([move_action + shot_action * 5], dtype=np.int32)
+                
+                elif self.action_mode == "default":
+                    return np.array([move_action, shot_action], dtype=np.int32)
+        
         # STEP 2: Check if a step shot is possible
         
         valid_computer_moves = []
@@ -289,8 +332,13 @@ class laser_tag_env(environment_base):
                     if done: 
                         move_action = move_direction + 1 
                         shot_action = shot_direction + 1
-                        return np.array([move_action + shot_action * 5], dtype=np.int32)
-                    
+                        
+                        if self.action_mode == "single":
+                            return np.array([move_action + shot_action * 5], dtype=np.int32)
+                        
+                        elif self.action_mode == "default":
+                            return np.array([move_action, shot_action], dtype=np.int32)
+       
         # STEP 3: Check if any moves would result in the possibility of an enemy step shot
         
         # only cycle through valid moves
@@ -298,6 +346,7 @@ class laser_tag_env(environment_base):
         
         # initialise the safe computer moves
         unsafe_computer_moves = []
+        safe_computer_moves = []
         
         # cycle through current player moves
         for computer_move_direction in range(valid_computer_moves.shape[0]):
@@ -344,17 +393,38 @@ class laser_tag_env(environment_base):
                             computer_move_safe = False
                             unsafe_computer_moves.append(comp_chosen_move)
                             break
-                        
+                
+                # break the loop if an unsafe move is found
                 if not computer_move_safe:                    
                     break
-                
+            
+            # make a list of safe moves
+            if computer_move_safe:
+                safe_computer_moves.append(comp_chosen_move)
+       
         # STEP 4: Take the shortest path to the player excluding those that would result in a step shot from opponent
         
         unsafe_computer_moves = np.array(unsafe_computer_moves, np.int32)
+        safe_computer_moves = np.array(safe_computer_moves, np.int32)
         
-        # if there are no safe actions take a random move
-        if unsafe_computer_moves.shape[0] == 4:
-            return np.random.randint(4, size=(1,)) + 1
+        # if there is only one safe move take it
+        if safe_computer_moves.shape[0] == 1:            
+            move_action = np.where(np.all(directions == safe_computer_moves, axis=1))[0][0] + 1 
+            
+            if self.action_mode == "single":
+                return np.array([move_action], dtype=np.int32)
+            
+            elif self.action_mode == "default":
+                return np.array([move_action, 0], dtype=np.int32)   
+        
+        # if there are no safe moves, do not move
+        if safe_computer_moves.shape[0] == 0:     
+            
+            if self.action_mode == "single":
+                return np.array([0], dtype=np.int32)
+            
+            elif self.action_mode == "default":
+                return np.array([0, 0], dtype=np.int32)   
                     
         # Remove the dangerous moves from the scope of the search algorithm
         temp_grid_map = np.copy(self.grid_map)
@@ -372,9 +442,14 @@ class laser_tag_env(environment_base):
         
         # get the selected move
         selected_move = np.array(path[-2], dtype=np.int32) - computer_pos        
-        selected_action = np.where(np.all(directions == selected_move, axis=1))[0] + 1        
-         
-        return selected_action
+        move_action = np.where(np.all(directions == selected_move, axis=1))[0][0] + 1   
+        
+        if self.action_mode == "single":
+            return np.array([move_action], dtype=np.int32)
+        
+        elif self.action_mode == "default":
+            return np.array([move_action, 0], dtype=np.int32)
+
             
     def init_display(self, grid_map):
         
@@ -385,8 +460,8 @@ class laser_tag_env(environment_base):
         image = axis.imshow(grid_map, cmap=cmap)
         
         # get the player and enemy positions
-        player_row, player_col = np.asarray(np.where(self.grid_map == self.PLAYER_PARAM)).flatten() 
-        enemy_row, enemy_col =  np.asarray(np.where(self.grid_map == self.ENEMY_PARAM)).flatten()         
+        player_row, player_col = np.asarray(np.where(self.grid_map == self.player_param)).flatten() 
+        enemy_row, enemy_col =  np.asarray(np.where(self.grid_map == self.enemy_param)).flatten()         
         
         # label their positions
         axis.text(player_col, player_row, 'P', ha="center", va="center", color="white")
@@ -400,23 +475,23 @@ class laser_tag_env(environment_base):
     def display(self):   
         
         # update the image
-        new_array = self.grid_map
+        new_array = np.copy(self.grid_map)
         self.image.set_data(new_array)
         
         # remove all the previous text labels
         self.axis.texts = []
         
         # get the player and label their positions
-        player_pos = np.where(self.grid_map == self.PLAYER_PARAM)
+        player_pos = np.where(self.grid_map == self.player_param)
         if len(player_pos[0]) > 0:        
             player_row, player_col = np.asarray(player_pos).flatten() 
-            self.axis.text(player_col, player_row, 'P', ha="center", va="center", color="white")
+            self.axis.text(player_col, player_row, self.player_lives, ha="center", va="center", color="white")
                         
         # get the enemy and label their positions
-        enemy_pos = np.where(self.grid_map == self.ENEMY_PARAM)        
+        enemy_pos = np.where(self.grid_map == self.enemy_param)        
         if len(enemy_pos[0]) > 0:
             enemy_row, enemy_col = np.asarray(enemy_pos).flatten()  
-            self.axis.text(enemy_col, enemy_row, 'E', ha="center", va="center", color="white")
+            self.axis.text(enemy_col, enemy_row, self.enemy_lives, ha="center", va="center", color="white")
         
         # mark the bullet's path on the grid            
         for sqr in range(self.bullet_path.shape[0]):
@@ -428,34 +503,38 @@ class laser_tag_env(environment_base):
         
         # draw the new image
         self.figure.canvas.draw_idle()
-        plt.pause(self.DISPLAY_PAUSE)   
+        plt.pause(self.display_pause)   
         
     def close_display(self):
         plt.close()
         
-if __name__ == "__main__":       
+if __name__ == "__main__":    
     
-    # intialise the environment
-    env = laser_tag_env(render=True)
+    seed_range = 100
     
-    # reset the state
-    state, done = env.reset(), False
-    counter = 0
+    for seed in range(seed_range):
     
-    # run the training loop
-    while not done and counter < 100:
+        # intialise the environment
+        env = laser_tag_env(seed=seed, render=False, action_mode="default", lives=3)
         
-        action = env.sample_discrete_action()            
-        next_state, reward, done, info = env.step(player_action=action)
+        # reset the state
+        state, done = env.reset(), False
+        counter = 0
         
-        # print the winner
-        if done: 
-            print('Player {} wins'.format(info["outcome"]))
+        # run the training loop
+        while not done and counter < 100:
             
-        state = next_state
-        counter += 1
-    
-    # close the display
-    env.close_display()
+            action = env.sample_discrete_action()            
+            next_state, reward, done, info = env.step(player_action=action)
+            
+            # print the winner
+            if done: 
+                print('Seed {} - Player {} wins'.format(seed, info["outcome"]))
+                
+            state = next_state
+            counter += 1
+        
+        # close the display
+        env.close_display()
     
             

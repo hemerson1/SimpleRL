@@ -47,17 +47,18 @@ class environment_base:
         assert valid_type, "The input must be an integer array."   
         
         # check the length is correct
-        valid_length = input_value.shape[0] == self.ACTION_DIM
-        assert valid_length, "The input must be of length {}".format(self.ACTION_DIM) 
+        valid_length = input_value.shape[0] == self.action_dim
+        assert valid_length, "The input must be of length {}".format(self.action_dim) 
         
         # check the values are permittable
-        valid_max = np.array_equal(np.minimum(input_value, self.ACTION_NUM - 1), input_value)
-        valid_min = np.array_equal(np.maximum(input_value, np.zeros(self.ACTION_DIM)), input_value)
+        valid_max = np.array_equal(np.minimum(input_value, self.action_num - 1), input_value)
+        valid_min = np.array_equal(np.maximum(input_value, np.zeros(self.action_dim)), input_value)
         assert (valid_max and valid_min), "The input must be within the valid range of actions"
         
         
     def sample_discrete_action(self):
-        return np.random.randint(self.ACTION_NUM - 1, size=self.ACTION_DIM)
+        raise NotImplementedError
+        return np.random.randint(self.action_num - 1, size=self.action_dim)
         
     def sample_continuous_action(self):
         raise NotImplementedError
@@ -68,8 +69,8 @@ if __name__ == "__main__":
     env = environment_base()    
     
     # initialise the number of actions and options per action
-    env.ACTION_DIM = 2
-    env.ACTION_NUM = np.array([2, 3], dtype=np.int32)
+    env.action_dim = 2
+    env.action_num = np.array([2, 3], dtype=np.int32)
     
     # example of valid array 
     input_val = np.array([1, 2], dtype=np.int32)
