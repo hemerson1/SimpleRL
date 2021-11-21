@@ -6,6 +6,11 @@ Created on Sun Oct 31 21:42:35 2021
 @author: hemerson
 """
 
+""" 
+environment_base - A template for environments for reinforcement learning agents
+
+"""
+
 import numpy as np
 
 class environment_base:
@@ -15,24 +20,53 @@ class environment_base:
             
         self.render - bool (is the environment visualised?)
         self.seed - int (what is the seeding for the environment?)
-        self.ACTION_DIM - int (how many actions are taken per turn?) 
             
-        Discrete: 
-        self.ACTION_NUM = np.int32 (how many discrete choices per action)
-            
-        Continuous:
         """
         pass
         
     def reset(self):
-        # TO DO: add requirements
+        """ 
+        Resets the parameters of the learning environment
+        
+        Inputs:
+        --------
+        None
+        
+        Returns:
+        ----------
+        state - np.float32 (the initialised state of the environment)
+        """   
         raise NotImplementedError
         
     def step(self, action=None):
-        # TO DO: add requirements
+        """ 
+        Updates the state of the environment following an action
+        
+        Inputs:
+        --------
+        action - np.int32 (the action selected by the agent)
+        
+        Returns:
+        ----------
+        state - np.float32 (the next state of the environment)
+        reward - float (the reward from taking the action)
+        done - bool (if this is the terminal state of the environment)
+        info - dict (additional information relating to the environment)
+        """   
         raise NotImplementedError
         
     def check_discrete_input(self, input_value):
+        """ 
+        Checks the player action is in the correct format
+        
+        Inputs:
+        --------
+        input - any type
+        
+        Returns:
+        ----------
+        None
+        """  
         
         # check the input is a numpy array
         valid_numpy = type(input_value) == np.ndarray   
@@ -57,10 +91,31 @@ class environment_base:
         
         
     def sample_discrete_action(self):
+        """ 
+        Returns a random discrete action
+        
+        Inputs:
+        --------
+        None
+        
+        Returns:
+        ----------
+        action - np.int32 (a random action from the environment)
+        """  
         raise NotImplementedError
-        return np.random.randint(self.action_num - 1, size=self.action_dim)
         
     def sample_continuous_action(self):
+        """ 
+        Returns a random continuous action
+        
+        Inputs:
+        --------
+        None
+        
+        Returns:
+        ----------
+        action - np.float32 (a random action from the environment)
+        """  
         raise NotImplementedError
 
 if __name__ == "__main__":  

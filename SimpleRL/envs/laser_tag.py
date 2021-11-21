@@ -5,6 +5,11 @@ Created on Sun Oct 31 21:57:14 2021
 
 @author: hemerson
 """
+
+""" 
+laser_tag_env - a simple grid environment for 1 vs 1 laser tag 
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -13,10 +18,8 @@ from SimpleRL.envs.base import environment_base
 from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 
 class laser_tag_env(environment_base):
-    
-    # TODO: update the notation
-    # TODO: remove inefficiency in the code
-    # TODO: add code for adversary 
+
+    # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", lives=1):
         
@@ -102,20 +105,19 @@ class laser_tag_env(environment_base):
           
         # check if the episode has terminated
         if not done:
-        
+            
+            # get the computer action
             if self.enemy_mode == "default":
                 computer_action = self.get_computer_action()                  
-                reward, done, info = self.update_grid(action=computer_action)       
+                reward, done, info = self.update_grid(action=computer_action)  
                 
-            elif self.enemy_mode == "adversarial":
-                
-                #TODO: add adversarial implementation in which two seperate agents can
-                #      be trained                
-                pass  
-                        
-        # display the map
-        if self.render:
-            self.display()
+                # display the map
+                if self.render:
+                    self.display()                
+            
+            # get the action of another network
+            elif self.enemy_mode == "adversarial":       
+                pass
                  
         return self.grid_map.flatten(), reward, done, info
     
@@ -510,12 +512,17 @@ class laser_tag_env(environment_base):
         
 if __name__ == "__main__":    
     
-    seed_range = 100
+    seed_range = 1
+    enemy_mode = "adversarial"
     
     for seed in range(seed_range):
     
         # intialise the environment
-        env = laser_tag_env(seed=seed, render=False, action_mode="default", lives=3)
+        env = laser_tag_env(seed=seed, 
+                            render=True,
+                            action_mode="default",
+                            enemy_mode=enemy_mode,
+                            lives=1)
         
         # reset the state
         state, done = env.reset(), False
@@ -533,6 +540,19 @@ if __name__ == "__main__":
                 
             state = next_state
             counter += 1
+            
+            # get an action from the opposing network in adversarial mode
+            if enemy_mode == "adversarial" and not done:
+                
+                action = env.sample_discrete_action()            
+                next_state, reward, done, info = env.step(player_action=action)
+                
+                # print the winner
+                if done: 
+                    print('Seed {} - Player {} wins'.format(seed, info["outcome"]))
+                    
+                state = next_state
+                counter += 1                
         
         # close the display
         env.close_display()

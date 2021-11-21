@@ -10,21 +10,17 @@ import numpy as np
 
 def generate_scenario(grid_size=8, player_param=1, enemy_param=2, terrain_param=3, empty_param=0): 
     
-    # TODO: update the parameter information to be consistent with the style  
-    
     """
-    creates a random grid with players, enemies and terrain fro the laser_tag game.
+    creates a random grid with players, enemies and terrain for the laser_tag game.
     
     Parameters:
     ----------
-    grid_size
-        how large a grid should the game be set in
+    grid_size - int (how large a grid should the game be set in)
         
     Return:
     ------
-     map_grid 
-         A 2d numpy array with values corresponding to player, enemy
-         and terrain obstacles         
+     map_grid - np.int32 (A 2d numpy array with values corresponding to player, enemy
+                          and terrain obstacles)         
     """
     
     percent_terrain = 0.3 # what is the percentage coverage of the grid with terrain
@@ -58,9 +54,22 @@ def generate_scenario(grid_size=8, player_param=1, enemy_param=2, terrain_param=
 
 def shortest_path(grid, start, goal):
     
-    # TODO: update documentation
-    # TODO: integrate with the environment
+    """
+    Calculates the shortest path between a start point and a goal in a given 
+    grid for the laser_tag game.
     
+    Parameters:
+    ----------
+    grid - np.int32 (the current board configuration)
+    start - np.int32 (the position of the starting point in the grid)
+    goal - np.int32 (the position of the goal point in the grid)
+        
+    Return:
+    ------
+    path - list (a list of coordinates for the shortest path in the given grid         
+    """
+    
+    # Implementation largely inspired by the following article:
     # https://levelup.gitconnected.com/dijkstras-shortest-path-algorithm-in-a-grid-eb505eb3a290
     
     # get the dimensions of the grid
