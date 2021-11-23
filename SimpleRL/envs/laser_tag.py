@@ -21,7 +21,7 @@ class laser_tag_env(environment_base):
 
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     
-    def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", lives=1):
+    def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1):
         
         # Get assertion errors
         
@@ -36,6 +36,12 @@ class laser_tag_env(environment_base):
         enemy_mode_error = "enemy_mode is not valid for this environment, " \
             + "please select one of the following {} ".format(valid_enemy_mode)
         assert enemy_mode in valid_enemy_mode, enemy_mode_error
+        
+        # Ensure the difficulty for the environment is valid
+        valid_difficulty = ["easy", "medium", "hard"]
+        difficulty_error = "enemy_mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_difficulty)
+        assert difficulty in valid_difficulty, difficulty_error
         
         self.render = render 
         self.seed = seed 
@@ -52,6 +58,19 @@ class laser_tag_env(environment_base):
         elif self.action_mode == "default":
             self.action_dim = 2
             self.action_num = np.array([5, 5], dtype=np.int32) 
+            
+            
+        # initialise the difficulty
+        self.difficulty = difficulty
+        self.computer_error = 0.0      
+        
+        # set medium difficulty
+        if self.difficulty == "medium":
+            self.computer_error = 0.25
+            
+        # set easy difficulty
+        elif self.difficulty == "easy":
+            self.computer_error = 0.5
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
@@ -246,7 +265,13 @@ class laser_tag_env(environment_base):
             if grid_map[row, col] == opposing_player: 
                 
                 # set the parameters to end the game
-                reward = self.positive_reward
+                
+                # get the correct reward
+                if self.current_player == self.player_param:
+                    reward = self.positive_reward
+                elif self.current_player == self.enemy_param:
+                    reward = self.negative_reward
+                
                 done = True
                 info["outcome"] = current_player
                 break
@@ -272,9 +297,16 @@ class laser_tag_env(environment_base):
     
     def get_computer_action(self):
         
-        # Want some sort of planning algorithm to make decisions        
-        # Planning horizon could represent the agent's difficulty maybe?
-        
+        # select a random action in the case the agent difficulty is set
+        random_num = np.random.uniform(0, 1, 1)        
+        if random_num < self.computer_error:
+            
+            if self.action_mode == "single":                
+                return np.random.randint(25, size=1)
+            
+            elif self.action_mode == "default":
+                return np.random.randint(5, size=2)
+
         # get the computer's and the player's location
         computer_pos = np.asarray(np.where(self.grid_map == self.current_player)).flatten() 
         player_pos =  np.asarray(np.where(self.grid_map == self.opposing_player)).flatten()    
@@ -512,16 +544,22 @@ class laser_tag_env(environment_base):
         
 if __name__ == "__main__":    
     
-    seed_range = 1
-    enemy_mode = "adversarial"
+    seed_range = 100
+    enemy_mode = "default"
+    difficulty = "hard"
+    action_mode = "default"
+    
+    # track the player wins out of max
+    total_reward = 0
     
     for seed in range(seed_range):
     
         # intialise the environment
         env = laser_tag_env(seed=seed, 
-                            render=True,
-                            action_mode="default",
+                            render=False,
+                            action_mode=action_mode,
                             enemy_mode=enemy_mode,
+                            difficulty=difficulty,
                             lives=1)
         
         # reset the state
@@ -533,6 +571,9 @@ if __name__ == "__main__":
             
             action = env.sample_discrete_action()            
             next_state, reward, done, info = env.step(player_action=action)
+            
+            if reward > 0:
+                total_reward += reward
             
             # print the winner
             if done: 
@@ -556,5 +597,7 @@ if __name__ == "__main__":
         
         # close the display
         env.close_display()
+        
+    print('Player won {}/{}'.format(total_reward, seed_range))
     
             
