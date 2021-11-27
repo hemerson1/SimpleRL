@@ -20,7 +20,6 @@ class laser_tag_env(environment_base):
 
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     # TODO: remove matplotlib dependency
-    # TODO: test in jupyter lab
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1):
         
@@ -98,6 +97,9 @@ class laser_tag_env(environment_base):
             self.window_width = 400
             self.window_height = 400
             
+            # get the screen
+            self.init_display() 
+            
             # set the fps
             self.fps = 5
             
@@ -109,10 +111,7 @@ class laser_tag_env(environment_base):
             self.grey = (160, 160, 160)
             self.blue = (102, 178, 255)
             self.red = (255, 51, 51)
-            self.black = (0, 0, 0)    
-            
-            # get the screen
-            self.init_display()       
+            self.black = (0, 0, 0)          
     
     def reset(self):
         
