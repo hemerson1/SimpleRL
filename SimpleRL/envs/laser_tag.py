@@ -11,8 +11,7 @@ laser_tag_env - a simple grid environment for 1 vs 1 laser tag
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import colors
+import pygame
 
 from SimpleRL.envs.base import environment_base 
 from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
@@ -20,6 +19,8 @@ from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 class laser_tag_env(environment_base):
 
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
+    # TODO: remove matplotlib dependency
+    # TODO: test in jupyter lab
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1):
         
@@ -57,8 +58,7 @@ class laser_tag_env(environment_base):
         # create the default multi-dimensional action space
         elif self.action_mode == "default":
             self.action_dim = 2
-            self.action_num = np.array([5, 5], dtype=np.int32) 
-            
+            self.action_num = np.array([5, 5], dtype=np.int32)             
             
         # initialise the difficulty
         self.difficulty = difficulty
@@ -93,7 +93,26 @@ class laser_tag_env(environment_base):
         
         # Intialise the display
         if self.render: 
-            self.image, self.figure, self.axis = self.init_display(self.grid_map)       
+            
+            # set the screen dimensions
+            self.window_width = 400
+            self.window_height = 400
+            
+            # set the fps
+            self.fps = 5
+            
+            # get the font 
+            self.font = pygame.font.Font(None, 32)
+            
+            # create the colours
+            self.green = (0, 153, 0)
+            self.grey = (160, 160, 160)
+            self.blue = (102, 178, 255)
+            self.red = (255, 51, 51)
+            self.black = (0, 0, 0)    
+            
+            # get the screen
+            self.init_display()       
     
     def reset(self):
         
@@ -485,66 +504,93 @@ class laser_tag_env(environment_base):
             return np.array([move_action, 0], dtype=np.int32)
 
             
-    def init_display(self, grid_map):
+    def init_display(self):
         
-        # define the colour map for the grid
-        cmap = colors.ListedColormap(['#5ba01b', '#3a87e2', '#c7484e', '#5c5c5c'])
+        # quit any previous games
+        pygame.display.quit()
         
-        figure, axis = plt.subplots(1,1)
-        image = axis.imshow(grid_map, cmap=cmap)
+        # initialise pygame
+        pygame.init()    
         
-        # get the player and enemy positions
-        player_row, player_col = np.asarray(np.where(self.grid_map == self.player_param)).flatten() 
-        enemy_row, enemy_col =  np.asarray(np.where(self.grid_map == self.enemy_param)).flatten()         
+        # initialise the clock
+        self.clock = pygame.time.Clock()
         
-        # label their positions
-        axis.text(player_col, player_row, 'P', ha="center", va="center", color="white")
-        axis.text(enemy_col, enemy_row, 'E', ha="center", va="center", color="white")            
+        # create the screen
+        self.screen = pygame.display.set_mode([self.window_height, self.window_width])
         
-        # adjust plot to figure area
-        figure.tight_layout()        
-        
-        return image, figure, axis
     
     def display(self):   
         
-        # update the image
-        new_array = np.copy(self.grid_map)
-        self.image.set_data(new_array)
-        
-        # remove all the previous text labels
-        self.axis.texts = []
-        
-        # get the player and label their positions
-        player_pos = np.where(self.grid_map == self.player_param)
-        if len(player_pos[0]) > 0:        
-            player_row, player_col = np.asarray(player_pos).flatten() 
-            self.axis.text(player_col, player_row, self.player_lives, ha="center", va="center", color="white")
+        # quit the game
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT:
+                pygame.display.quit()
                         
-        # get the enemy and label their positions
-        enemy_pos = np.where(self.grid_map == self.enemy_param)        
-        if len(enemy_pos[0]) > 0:
-            enemy_row, enemy_col = np.asarray(enemy_pos).flatten()  
-            self.axis.text(enemy_col, enemy_row, self.enemy_lives, ha="center", va="center", color="white")
+        # set the background colour to green
+        self.screen.fill(self.green)        
         
-        # mark the bullet's path on the grid            
-        for sqr in range(self.bullet_path.shape[0]):
-            self.axis.text(self.bullet_path[sqr, 1], self.bullet_path[sqr, 0], '*', ha="center", va="center", color="black")
+        # set the size of the block
+        block_size = int(400 / self.grid_size) 
+        
+        # loop through the grid
+        for x in range(0, self.window_width, block_size):
+            for y in range(0, self.window_height, block_size):
                 
-        # mark a hit on the grid
-        if self.bullet_hits.shape[0] > 0:
-            self.axis.text(self.bullet_hits[0, 1], self.bullet_hits[0, 0], 'X', ha="center", va="center", color="black")
+                row = int(x / block_size)
+                col = int(y / block_size)
+                
+                colour = self.green
+                text = ""
+                
+                # create the rect for the grid
+                rect = pygame.Rect(x, y, block_size, block_size)
+                
+                # mark the player
+                if self.grid_map[row, col] == 1:
+                    colour = self.blue     
+                    text = str(self.player_lives)
+                    
+                # mark the enemy
+                elif self.grid_map[row, col] == 2:
+                    colour = self.red    
+                    text = str(self.enemy_lives)
+                
+                # mark obstacles
+                elif self.grid_map[row, col] == 3:
+                    colour = self.grey 
+                
+                # mark hits
+                if self.bullet_hits.shape[0] > 0:                    
+                    if row == self.bullet_hits[0, 0] and col == self.bullet_hits[0, 1]:
+                        text = 'X'
+                        
+                # mark the bullet path
+                if self.bullet_path.shape[0] > 0:  
+                    for blt in range(self.bullet_path.shape[0]):
+                        if row == self.bullet_path[blt, 0] and col == self.bullet_path[blt, 1]:
+                            text = "*"
+                            break                        
+                
+                # get the centred text                    
+                text_surface = self.font.render(text, True, self.black)
+                text_rect = text_surface.get_rect(center=(rect.x + block_size/2, rect.y + block_size/2))  
+                
+                # draw the square
+                pygame.draw.rect(self.screen, colour, rect)    
+                self.screen.blit(text_surface, text_rect)
+          
+        # update the display
+        pygame.display.update()
         
-        # draw the new image
-        self.figure.canvas.draw_idle()
-        plt.pause(self.display_pause)   
+        # update the frame rate
+        self.clock.tick(self.fps)
         
     def close_display(self):
-        plt.close()
+        pygame.display.quit()
         
-if __name__ == "__main__":    
-    
-    seed_range = 100
+if __name__ == "__main__": 
+        
+    seed_range = 10
     enemy_mode = "default"
     difficulty = "hard"
     action_mode = "default"
@@ -556,11 +602,11 @@ if __name__ == "__main__":
     
         # intialise the environment
         env = laser_tag_env(seed=seed, 
-                            render=False,
+                            render=True,
                             action_mode=action_mode,
                             enemy_mode=enemy_mode,
                             difficulty=difficulty,
-                            lives=1)
+                            lives=3)
         
         # reset the state
         state, done = env.reset(), False
