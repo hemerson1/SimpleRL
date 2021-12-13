@@ -8,7 +8,7 @@ Created on Mon Nov  1 14:47:03 2021
 
 from setuptools import setup, find_packages
 
-VERSION = '0.0.10' 
+VERSION = '0.0.13' 
 DESCRIPTION = 'SimpleRL'
 LONG_DESCRIPTION = 'A package containing several lightweight reinforcement learning environments'
 
@@ -24,7 +24,7 @@ setup(
         install_requires=[
         	"numpy==1.21.4",
         	"pygame==2.1.0",
-		"setuptools==50.3.1.post20201107"
+		'setuptools==58.0.4'
             ],        
         keywords=['reinforcement learning', 'environment'],
         classifiers= [

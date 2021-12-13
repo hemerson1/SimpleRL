@@ -12,6 +12,8 @@ laser_tag_env - a simple grid environment for 1 vs 1 laser tag
 
 import numpy as np
 import pygame
+import os, datetime
+import imageio
 
 from SimpleRL.envs.base import environment_base 
 from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
@@ -19,10 +21,9 @@ from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 class laser_tag_env(environment_base):
 
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: remove matplotlib dependency
     
-    def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1):
-        
+    def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1, render_mode="default"):
+                
         # Get assertion errors
         
         # Ensure the enemy mode for the environment is valid
@@ -43,7 +44,14 @@ class laser_tag_env(environment_base):
             + "please select one of the following {} ".format(valid_difficulty)
         assert difficulty in valid_difficulty, difficulty_error
         
+        # Ensure the render_mode for the environment is valid
+        valid_render = ["default", "video"]
+        render_error = "render_mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_render)
+        assert render_mode in valid_render, render_error
+        
         self.render = render 
+        self.render_mode = render_mode
         self.seed = seed 
         self.enemy_mode = enemy_mode
         self.action_mode = action_mode
@@ -73,6 +81,7 @@ class laser_tag_env(environment_base):
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
+        self.environment_name = 'Laser_tag'
         self.shot_range = 5 # how many squares will a bullet travel?
         self.grid_size = 8
         self.positive_reward = +1
@@ -92,6 +101,24 @@ class laser_tag_env(environment_base):
         
         # Intialise the display
         if self.render: 
+            
+            # Check if there is an available display
+            try: os.environ["DISPLAY"]
+            
+            # Configure a dummy display
+            except: os.environ["SDL_VIDEODRIVER"] = "dummy"
+            
+            if self.render_mode == 'video':
+                self.frame_count = 0     
+                
+                # make the image directory
+                self.image_folder = '{}_images'.format(self.environment_name)
+                os.makedirs(self.image_folder)
+                
+                # make the video directory
+                self.video_folder = "{}_videos".format(self.environment_name)
+                if not os.path.isdir(self.video_folder):
+                    os.makedirs(self.video_folder)
             
             # set the screen dimensions
             self.window_width = 400
@@ -155,6 +182,9 @@ class laser_tag_env(environment_base):
             # get the action of another network
             elif self.enemy_mode == "adversarial":       
                 pass
+               
+        if done and self.render: 
+            self.close_display()         
                  
         return self.grid_map.flatten(), reward, done, info
     
@@ -577,6 +607,12 @@ class laser_tag_env(environment_base):
                 # draw the square
                 pygame.draw.rect(self.screen, colour, rect)    
                 self.screen.blit(text_surface, text_rect)
+        
+        # save frames to the folder
+        if self.render_mode == "video":
+            self.frame_count += 1
+            filename = "{}/screen_{:04}.png".format(self.image_folder, self.frame_count)
+            pygame.image.save(self.screen, filename)
           
         # update the display
         pygame.display.update()
@@ -585,7 +621,32 @@ class laser_tag_env(environment_base):
         self.clock.tick(self.fps)
         
     def close_display(self):
+        
+        # shut the display window
         pygame.display.quit()
+        
+        # create a video
+        if self.render_mode == 'video':
+        
+            # define the image directory
+            images = []
+
+            # create the full image paths
+            for file_name in sorted(os.listdir(self.image_folder)):
+                if file_name.endswith('.png'):
+                    file_path = os.path.join(self.image_folder, file_name)
+                    images.append(imageio.imread(file_path))
+
+            # convert to gif format
+            final_timestamp = str(datetime.datetime.now())
+            imageio.mimsave('{}/{}.gif'.format(self.video_folder, final_timestamp), images, fps=self.fps) 
+
+            # delete the image files
+            for file in os.listdir(self.image_folder):
+                os.remove(os.path.join(self.image_folder, file))
+
+            # remove the empty directory
+            os.rmdir(self.image_folder)
         
 if __name__ == "__main__": 
         
@@ -638,10 +699,7 @@ if __name__ == "__main__":
                     print('Seed {} - Player {} wins'.format(seed, info["outcome"]))
                     
                 state = next_state
-                counter += 1                
-        
-        # close the display
-        env.close_display()
+                counter += 1
         
     print('Player won {}/{}'.format(total_reward, seed_range))
     
