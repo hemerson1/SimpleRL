@@ -24,7 +24,8 @@ setup(
         install_requires=[
         	"numpy==1.21.4",
         	"pygame==2.1.0",
-		'setuptools==58.0.4'
+		"setuptools==58.0.4",
+		"imageio==2.13.3"
             ],        
         keywords=['reinforcement learning', 'environment'],
         classifiers= [

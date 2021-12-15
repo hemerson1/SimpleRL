@@ -8,6 +8,11 @@ Created on Sun Oct 31 21:57:14 2021
 
 """ 
 laser_tag_env - a simple grid environment for 1 vs 1 laser tag 
+
+Players can perform an shot and a movement each turn which are limited to either:
+up, down, left or right. A player loses a life if they are shot by their opponent,
+when either player has no lives left the game is over.
+
 """
 
 import numpy as np
@@ -23,7 +28,7 @@ class laser_tag_env(environment_base):
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1, render_mode="default"):
-                
+        
         # Get assertion errors
         
         # Ensure the enemy mode for the environment is valid
@@ -49,6 +54,18 @@ class laser_tag_env(environment_base):
         render_error = "render_mode is not valid for this environment, " \
             + "please select one of the following {} ".format(valid_render)
         assert render_mode in valid_render, render_error
+        
+        # Display the input settings 
+        print('\nLaser Tag Settings')
+        print('--------------------')
+        print('Render: {}'.format(render))        
+        print('Seed: {}'.format(seed))
+        print('Action Mode: {}'.format(action_mode))
+        print('Enemy Mode: {}'.format(enemy_mode))
+        print('Difficulty: {}'.format(difficulty))
+        print('Lives: {}'.format(lives))
+        print('Render Mode: {}'.format(render_mode))   
+        print('--------------------')
         
         self.render = render 
         self.render_mode = render_mode
