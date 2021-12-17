@@ -36,14 +36,18 @@ def generate_patient(illness_likelihood, death_probs, recovery_time, id_number):
     patient_recovery_time = recovery_time[patient_class] + np.random.randint(-2, +3)
 
     # update the patient records
+    patient_info['id'] = id_number
     patient_info['disease_class'] = patient_class
     patient_info['death_prob'] = patient_death_prob  
     patient_info['recovery_time'] = patient_recovery_time     
         
     # has the patient been diagnosed
     patient_info['diagnosed'] = False 
+    patient_info['room_number'] = None
+    patient_info['waiting_time'] = 0
     
     return patient_info
+
     
 def generate_staff(staff_split, staff_efficiency, staff_roles, staff_number=10):
     """
@@ -80,12 +84,30 @@ def generate_staff(staff_split, staff_efficiency, staff_roles, staff_number=10):
         
         # add the treatment related info
         staff_member_info["current_role"] = None
-        staff_member_info["patient_id"] = None
+        staff_member_info["room_number"] = None
         
         # add them to the roster
         staff_roster.append(staff_member_info)
        
     return staff_roster
+
+
+def generate_rooms(number_rooms):
+    
+    # initialise the rooms
+    room_arrangement = []
+    
+    # create the diagnosis rooms
+    for room_num in range(1, number_rooms + 1):
+        
+        room = dict()
+        room["room_number"] = room_num
+        room["patient_id"] = None
+        room["staff_ids"] = []
+        
+        room_arrangement.append(room)
+        
+    return room_arrangement        
 
 
 if __name__ == "__main__": 
@@ -121,5 +143,14 @@ if __name__ == "__main__":
     
     print('\nTest Staff Profile:')
     print(staff_roster[0])
+    
+    # define the building parameters 
+    number_rooms = 10
+    
+    # intialise the rooms    
+    room_arrangement = generate_rooms(number_rooms=number_rooms)
+    
+    print('\nRoom Profile:')
+    print(room_arrangement[0])
     
     
