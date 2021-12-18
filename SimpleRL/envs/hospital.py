@@ -28,9 +28,6 @@ from SimpleRL.utils.hospital_utils import generate_patient, generate_staff, gene
 class hospital_env:
     def __init__(self, seed=None):
         
-        # TODO: how is the state of the enviornment going to be represented?
-        # TODO: what are the actions going to be? (assigning staff to patients)
-        # TODO: add seeding
         # TODO: add rendering
         
         # define the environmental parameters
@@ -72,7 +69,7 @@ class hospital_env:
             staff_roles=self.staff_roles
             )
         
-        print('Doctor ids: {}'.format(self.doctor_ids))
+        # print('Doctor ids: {}'.format(self.doctor_ids))
         
         # reset the current patients in the hospital
         self.hospital_patients = []
@@ -190,7 +187,7 @@ class hospital_env:
                 recovered = False                
                 if current_patient['recovery_time'] <= 0:
                     
-                    print('Patient {} has recovered'.format(current_patient['id']))
+                    # print('Patient {} has recovered'.format(current_patient['id']))
                     
                     # remove from hospital patients
                     self.hospital_patients.pop(current_patient_idx)
@@ -198,28 +195,30 @@ class hospital_env:
                     # update the room
                     self.room_arrangement[room_idx]["patient_id"] = None       
                     
-                    recovered = True
-                    
                     # update recovered
                     recovered_today += 1
-                
-                # update the illness of the patient     
-                self.hospital_patients[current_patient_idx]['waiting_time'] += 1
-                waiting_today += 1
+                    recovered = True
                 
                 # update the days deaths
+                dead = False
                 if np.random.uniform(0, 1, 1) < current_patient['death_prob'] and not recovered:
                     
-                    print('Patient {} has died'.format(current_patient['id']))
+                    # print('Patient {} has died'.format(current_patient['id']))
                     
                     # update deaths
                     deaths_today += 1
+                    dead = True
                     
                     # remove from hospital patients
                     self.hospital_patients.pop(current_patient_idx)
                     
                     # update the room
                     self.room_arrangement[room_idx]["patient_id"] = None 
+                    
+                # update the illness of the patient    
+                if not dead and not recovered:
+                    self.hospital_patients[current_patient_idx]['waiting_time'] += 1
+                    waiting_today += 1
                     
                             
         # generate a patient ----------------------------------------
@@ -300,37 +299,43 @@ if __name__ == "__main__":
     
     test_days = 10
     staff_number = 10
+    seeds = 1000
+    display = False
     
-    # initialise the environment
-    env = hospital_env(seed=0)
+    for seed in range(seeds):
     
-    for days in range(test_days):
-    
-        # test action with each element representing a person 
-        # and the idx representing their room assignment        
+        # initialise the environment
+        env = hospital_env()
         
-        action = np.random.randint(10, size=10)  
+        print('Seed {}'.format(seed))
         
-        print('Chosen_action: {}'.format(action))
+        for days in range(test_days):
         
-        print('\nDay {} ----------'.format(days))
+            # test action with each element representing a person 
+            # and the idx representing their room assignment        
+            
+            action = np.random.randint(10, size=10)  
+            
+            # take a step
+            env.step(action=action)
+            
+            if display:
+                print('Chosen_action: {}'.format(action))            
+                print('\nDay {} ----------'.format(days))
+                
+                print('\nRoom Arrangement:')
+                print(env.room_arrangement)
+                
+                print('\nCurrent Patients:')
+                print(env.hospital_patients)
+                print('---------------------------')
         
-        # take a step
-        env.step(action=action)
-        
-        print('\nRoom Arrangement:')
-        print(env.room_arrangement)
-        
-        print('\nCurrent Patients:')
-        print(env.hospital_patients)
-        print('---------------------------')
-    
-    print('\nSUMMARY ----------------------------------')
-    print('Total patients seen: {}'.format(env.current_patient_id + 1))
-    print('Total deaths: {}'.format(env.total_deaths))
-    print('Total recoveries: {}'.format(env.total_recoveries))
-    print('Total days waiting: {}'.format(env.total_days_waited))
-    print('-------------------------------------------')
-        
+        if display:
+            print('\nSUMMARY ----------------------------------')
+            print('Total patients seen: {}'.format(env.current_patient_id + 1))
+            print('Total deaths: {}'.format(env.total_deaths))
+            print('Total recoveries: {}'.format(env.total_recoveries))
+            print('Total days waiting: {}'.format(env.total_days_waited))
+            print('-------------------------------------------')        
     
         
