@@ -16,9 +16,14 @@ def init_video(environment_name):
     
     frame_count = 0     
     
-    # make the image directory
+    # make the image directory if it doesn't exist
     image_folder = '{}_images'.format(environment_name)
-    os.makedirs(image_folder)
+    if not os.path.isdir(image_folder):
+        os.makedirs(image_folder)
+    
+    # delete the pre-existing image files to avoid adding wrong images
+    for file in os.listdir(image_folder):
+        os.remove(os.path.join(image_folder, file))
     
     # make the video directory
     video_folder = "{}_videos".format(environment_name)
@@ -27,7 +32,6 @@ def init_video(environment_name):
         
         
     return frame_count, image_folder, video_folder
-
 
 def save_frames(screen, image_folder, frame_count):
     

@@ -32,10 +32,9 @@ class hospital_env:
     def __init__(self, render=False, seed=None, max_timestep=180, render_mode="default"):
         
         # TODO: putting all staff in room 0 is enough to get perfect score
-        # TODO: tidy up the code
-        # TODO: add notation to everything
+        # TODO: perform general optimisation
+        # TODO: optimise the image display code to remove long conditional statements
         # TODO: ensure that all the inputs are correct
-        # TODO: test new video function
         
         # Ensure the render_mode for the environment is valid
         valid_render = ["default", "video"]
@@ -49,15 +48,17 @@ class hospital_env:
         print('Render: {}'.format(render))        
         print('Seed: {}'.format(seed))
         print('Max Timestep: {} days'.format(max_timestep))
+        print('Render Mode: {}'.format(render_mode)) 
         print('--------------------')
         
         self.render = render
         self.seed = seed
-        self.max_timestep = max_timestep # 6 months default
+        self.max_timestep = max_timestep # in days
         self.render_mode = render_mode
         
         # define the environmental parameters
         np.random.seed(self.seed)  
+        self.environment_name = 'Hopsital'
         
         # define the illness parameters (for mild, moderate & severe)
         self.disease_classification = ["mild", "moderate", "severe"]
@@ -155,33 +156,21 @@ class hospital_env:
         """
         state:
         ------
-        
-        need to show: 
-            - which rooms have patients
-            - which rooms have doctors and nurses
-            - how severe the patient's disease is 
-            - how many days they have been waiting
-            - whether they require diagnosis or 
             
-        2D array:
-        number of rooms x patient_severity (0=None, 1=Mild, 2=Moderate, 3=Severe) 
-                          + days waiting (0, 1, 2, 3, ...)
-                          + diagnosis or treatment (0=None, 1=diagnosis, 2=treatment)
-                          
-        n x (1 + 1 + 1) = 3n (e.g. 30 states)
+        1D array: (3 x no. of rooms)
+        
+        Each room has:
+            - patient_severity (0=None, 1=Mild, 2=Moderate, 3=Severe) 
+            - days waiting (0, 1, 2, 3, ...)
+            - diagnosis or treatment (0=None, 1=diagnosis, 2=treatment)
         
         action:
         -------
         
-        need to choose:
-            - which nurses are assigned to which rooms
-            - which doctors are assigned to which rooms
-            
-        could change the arrangement each timestep
+        1d array: (1 x no. of staff)
         
-        1d array:
-        number of doctors + number of nurses (give room number 0, 1, ...)        
-        n = n (e.g. 10 actions)        
+        Each staff member is assigned the room in which they are needed (0, 1, 2 ..)
+        
         """
         
         # initialise the reward tallys
@@ -212,8 +201,7 @@ class hospital_env:
                 current_patient_idx = None
                                 
                 # find the patient's medical record
-                for idx, patient in enumerate(self.hospital_patients):                  
-                    
+                for idx, patient in enumerate(self.hospital_patients):                     
                     if patient["id"] == room["patient_id"]:
                         current_patient = patient
                         current_patient_idx = idx
@@ -321,8 +309,7 @@ class hospital_env:
                 
         # visualise the next state --------------------------------
         
-        state = np.zeros((self.number_rooms, 3))
-        
+        state = np.zeros((self.number_rooms, 3))        
         for idx, room in enumerate(self.room_arrangement):
             
             # if there is a patient in the room
@@ -352,12 +339,16 @@ class hospital_env:
         
         done = False
         self.day_counter += 1
+        
+        # terminate when max timesteps reached
         if self.day_counter == self.max_timestep:
             done = True
             
             # close the pygame window
             if self.render:
                 self.close_display()
+        
+        # get additional info ------------------------------------
         
         info = {}
             
