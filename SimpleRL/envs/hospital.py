@@ -23,16 +23,25 @@ Patients must be first diagnosed and then assigned to the relevant treatment.
 
 import numpy as np
 import pygame
+import os
 
 from SimpleRL.utils.hospital_utils import generate_patient, generate_staff, generate_rooms
+from SimpleRL.utils.video import init_video, save_frames, create_video
 
 class hospital_env:
-    def __init__(self, render=False, seed=None, max_timestep=180):
+    def __init__(self, render=False, seed=None, max_timestep=180, render_mode="default"):
         
         # TODO: putting all staff in room 0 is enough to get perfect score
         # TODO: tidy up the code
         # TODO: add notation to everything
         # TODO: ensure that all the inputs are correct
+        # TODO: test new video function
+        
+        # Ensure the render_mode for the environment is valid
+        valid_render = ["default", "video"]
+        render_error = "render_mode is not valid for this environment, " \
+            + "please select one of the following {} ".format(valid_render)
+        assert render_mode in valid_render, render_error
         
         # Display the input settings 
         print('\nHospital Settings')
@@ -44,10 +53,11 @@ class hospital_env:
         
         self.render = render
         self.seed = seed
+        self.max_timestep = max_timestep # 6 months default
+        self.render_mode = render_mode
         
         # define the environmental parameters
         np.random.seed(self.seed)  
-        self.max_timestep = max_timestep # 6 months default
         
         # define the illness parameters (for mild, moderate & severe)
         self.disease_classification = ["mild", "moderate", "severe"]
@@ -76,6 +86,15 @@ class hospital_env:
         
         # Intialise the display
         if self.render: 
+            
+            # Check if there is an available display
+            try: os.environ["DISPLAY"]
+            
+            # Configure a dummy display
+            except: os.environ["SDL_VIDEODRIVER"] = "dummy"
+            
+            if self.render_mode == 'video':
+                self.frame_count, self.image_folder, self.video_folder = init_video(environment_name=self.environment_name)
             
             # set the screen dimensions
             self.window_width = 414
@@ -500,6 +519,10 @@ class hospital_env:
                 # draw the square
                 pygame.draw.rect(self.screen, colour, rect)   
                 self.screen.blit(text_surface, text_rect)
+                
+        # save frames to the folder
+        if self.render_mode == "video":            
+            self.frame_count = save_frames(screen=self.screen, image_folder=self.image_folder, frame_count=self.frame_count)
           
         # update the display
         pygame.display.update()
@@ -512,6 +535,10 @@ class hospital_env:
         
         # shut the display window
         pygame.display.quit()
+        
+        # create a video
+        if self.render_mode == 'video':    
+            create_video(image_folder=self.image_folder, video_folder=self.video_folder, fps=self.fps)
             
         
 if __name__ == "__main__": 

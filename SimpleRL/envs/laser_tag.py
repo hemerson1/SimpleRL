@@ -17,16 +17,17 @@ when either player has no lives left the game is over.
 
 import numpy as np
 import pygame
-import os, datetime
-import imageio
+import os
 
 from SimpleRL.envs.base import environment_base 
 from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
+from SimpleRL.utils.video import init_video, save_frames, create_video
 
 class laser_tag_env(environment_base):
     
     # TODO: is it really necessary to have multi and single action space -> I don't think so
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
+    # TODO: test new video function
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1, render_mode="default"):
         
@@ -127,16 +128,7 @@ class laser_tag_env(environment_base):
             except: os.environ["SDL_VIDEODRIVER"] = "dummy"
             
             if self.render_mode == 'video':
-                self.frame_count = 0     
-                
-                # make the image directory
-                self.image_folder = '{}_images'.format(self.environment_name)
-                os.makedirs(self.image_folder)
-                
-                # make the video directory
-                self.video_folder = "{}_videos".format(self.environment_name)
-                if not os.path.isdir(self.video_folder):
-                    os.makedirs(self.video_folder)
+                self.frame_count, self.image_folder, self.video_folder = init_video(environment_name=self.environment_name)
             
             # set the screen dimensions
             self.window_width = 400
@@ -627,10 +619,8 @@ class laser_tag_env(environment_base):
                 self.screen.blit(text_surface, text_rect)
         
         # save frames to the folder
-        if self.render_mode == "video":
-            self.frame_count += 1
-            filename = "{}/screen_{:04}.png".format(self.image_folder, self.frame_count)
-            pygame.image.save(self.screen, filename)
+        if self.render_mode == "video":            
+            self.frame_count = save_frames(screen=self.screen, image_folder=self.image_folder, frame_count=self.frame_count)
           
         # update the display
         pygame.display.update()
@@ -644,27 +634,9 @@ class laser_tag_env(environment_base):
         pygame.display.quit()
         
         # create a video
-        if self.render_mode == 'video':
+        if self.render_mode == 'video':    
+            create_video(image_folder=self.image_folder, video_folder=self.video_folder, fps=self.fps)
         
-            # define the image directory
-            images = []
-
-            # create the full image paths
-            for file_name in sorted(os.listdir(self.image_folder)):
-                if file_name.endswith('.png'):
-                    file_path = os.path.join(self.image_folder, file_name)
-                    images.append(imageio.imread(file_path))
-
-            # convert to gif format
-            final_timestamp = str(datetime.datetime.now())
-            imageio.mimsave('{}/{}.gif'.format(self.video_folder, final_timestamp), images, fps=self.fps) 
-
-            # delete the image files
-            for file in os.listdir(self.image_folder):
-                os.remove(os.path.join(self.image_folder, file))
-
-            # remove the empty directory
-            os.rmdir(self.image_folder)
         
 if __name__ == "__main__": 
         
