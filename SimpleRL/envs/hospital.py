@@ -22,18 +22,32 @@ Patients must be first diagnosed and then assigned to the relevant treatment.
 """
 
 import numpy as np
+import pygame
 
 from SimpleRL.utils.hospital_utils import generate_patient, generate_staff, generate_rooms
 
 class hospital_env:
-    def __init__(self, seed=None):
+    def __init__(self, render=False, seed=None, max_timestep=180):
         
-        # TODO: add rendering
+        # TODO: putting all staff in room 0 is enough to get perfect score
+        # TODO: tidy up the code
+        # TODO: add notation to everything
+        # TODO: ensure that all the inputs are correct
+        
+        # Display the input settings 
+        print('\nHospital Settings')
+        print('--------------------')
+        print('Render: {}'.format(render))        
+        print('Seed: {}'.format(seed))
+        print('Max Timestep: {} days'.format(max_timestep))
+        print('--------------------')
+        
+        self.render = render
+        self.seed = seed
         
         # define the environmental parameters
-        self.seed = seed
         np.random.seed(self.seed)  
-        self.max_timestep = 30 * 6 # 6 months
+        self.max_timestep = max_timestep # 6 months default
         
         # define the illness parameters (for mild, moderate & severe)
         self.disease_classification = ["mild", "moderate", "severe"]
@@ -52,13 +66,43 @@ class hospital_env:
         
         # define the reward
         self.death_penalty = -100
-        self. waiting_penalty = -1
+        self.waiting_penalty = -1
         
         # define the hospital parameters    
         self.number_rooms = 10
         
         # Reset the environment parameters
         self.reset()
+        
+        # Intialise the display
+        if self.render: 
+            
+            # set the screen dimensions
+            self.window_width = 414
+            self.window_height = 414
+            
+            # get the screen
+            self.init_display() 
+            
+            # set the fps
+            self.fps = 1
+            
+            # get the font 
+            self.font = pygame.font.Font(None, 24)
+            
+            # create the colours
+            self.green = (0, 153, 0)
+            self.grass_green = (104, 184, 69)            
+            self.light_grey = (199,199,199)
+            self.blue = (102, 178, 255)
+            self.red = (255, 51, 51)
+            self.black = (0, 0, 0)  
+            self.brown = (112, 85, 49)
+            self.pale_blue = (193, 223, 234)
+            self.glass_blue = (86, 184, 212)            
+            self.orange = (255, 128, 0)
+            self.light_orange = (199, 155, 123)
+            self.sand_yellow = (188, 177, 140)
         
     def reset(self):
         
@@ -68,8 +112,6 @@ class hospital_env:
             staff_efficiency=self.staff_efficiency, 
             staff_roles=self.staff_roles
             )
-        
-        # print('Doctor ids: {}'.format(self.doctor_ids))
         
         # reset the current patients in the hospital
         self.hospital_patients = []
@@ -140,7 +182,7 @@ class hospital_env:
             # add the ids of the staff to the relevant rooms
             self.room_arrangement[room_num]["staff_ids"].append(staff_idx)                  
             
-        # add the changes as a result of staff presence -------------
+        # add the changes as a result of staff presence -------------       
         
         for room_idx, room in enumerate(self.room_arrangement):
             
@@ -185,9 +227,7 @@ class hospital_env:
                 
                 # remove the patient if they have recovered
                 recovered = False                
-                if current_patient['recovery_time'] <= 0:
-                    
-                    # print('Patient {} has recovered'.format(current_patient['id']))
+                if current_patient['recovery_time'] <= 0 and current_patient['diagnosed']:
                     
                     # remove from hospital patients
                     self.hospital_patients.pop(current_patient_idx)
@@ -202,8 +242,6 @@ class hospital_env:
                 # update the days deaths
                 dead = False
                 if np.random.uniform(0, 1, 1) < current_patient['death_prob'] and not recovered:
-                    
-                    # print('Patient {} has died'.format(current_patient['id']))
                     
                     # update deaths
                     deaths_today += 1
@@ -233,26 +271,34 @@ class hospital_env:
                 recovery_time=self.recovery_time, 
                 id_number = self.current_patient_id
                 )
+            
+            # check if hospital is at max capacity
+            if len(self.hospital_patients) <= self.number_rooms:
         
-            # add patients to the rooms
-            for room in self.room_arrangement:
+                # add patients to the rooms
+                for room in self.room_arrangement:
+                    
+                    # add patient ID to room and update current_id
+                    if room['patient_id'] == None:
+                        
+                        # add patient id to room
+                        room['patient_id'] = self.current_patient_id
+                        
+                        # add room number to patient
+                        new_patient['room_number'] = room['room_number']
+                        
+                        # add patient to the hospital list
+                        self.hospital_patients.append(new_patient)
+                        
+                        # update patient_id
+                        self.current_patient_id += 1
+                        
+                        break
                 
-                # add patient ID to room and update current_id
-                if room['patient_id'] == None:
-                    
-                    # add patient id to room
-                    room['patient_id'] = self.current_patient_id
-                    
-                    # add room number to patient
-                    new_patient['room_number'] = room['room_number']
-                    
-                    # add patient to the hospital list
-                    self.hospital_patients.append(new_patient)
-                    
-                    # update patient_id
-                    self.current_patient_id += 1
-                    
-                    break
+        # display the hospital ------------------------------------
+        
+        if self.render:
+            self.display()            
                 
         # visualise the next state --------------------------------
         
@@ -289,25 +335,202 @@ class hospital_env:
         self.day_counter += 1
         if self.day_counter == self.max_timestep:
             done = True
+            
+            # close the pygame window
+            if self.render:
+                self.close_display()
         
         info = {}
             
-        return state, reward, done, info        
+        return state, reward, done, info     
+    
+    def init_display(self):
+        
+        # quit any previous games
+        pygame.display.quit()
+        
+        # initialise pygame
+        pygame.init()    
+        
+        # initialise the clock
+        self.clock = pygame.time.Clock()
+        
+        # create the screen
+        self.screen = pygame.display.set_mode([self.window_height, self.window_width])
+        
+        
+    def display(self):   
+        
+        # quit the game
+        for event in pygame.event.get():
+            if event.type==pygame.QUIT:
+                pygame.display.quit()
+                        
+        # set the background colour to green
+        self.screen.fill(self.black)
+
+        grid_size = 18
+        
+        # set the size of the block
+        block_size = int(self.window_height / grid_size) 
+        
+        # loop through the grid
+        for x in range(0, self.window_width, block_size):
+            for y in range(0, self.window_height, block_size):
+                
+                # set the floor colour
+                colour = self.light_grey  
+                text = ""
+                    
+                # fill in the hopsital border
+                if (x == block_size * 2) or (x == self.window_width - block_size * 3) or (y == block_size) or (y == self.window_height - block_size * 2):
+                    colour = self.light_orange
+                    
+                # fill in the vertical hospital walls
+                if (x == block_size * 7) or (x == block_size * 10):
+                    colour = self.light_orange
+                
+                # add in additional room features
+                if (y % (block_size * 3) == block_size * 2):
+                    
+                    # add some windows
+                    if ((x == block_size * 2) or (x == self.window_width - block_size * 3)):
+                        colour = self.glass_blue
+                        
+                    # add the patient room doors
+                    if ((x == block_size * 7) or (x == block_size * 10)):
+                         colour = self.brown
+                         
+                # calculate the room number
+                
+                # get the patient corridor
+                column = 0    
+                if x > block_size * 8:
+                    column = 1
+                
+                # get the row
+                row = int(y / (block_size * 3)) - 1
+                
+                # calculate the room_num
+                room_num = row + column * 5
+            
+                
+                if y > block_size and y < self.window_width - block_size:
+                    
+                    # add in patients                
+                    if (y % (block_size * 3) == 0) and (x == block_size * 3 or x == block_size * 4 or x == block_size * 13 or x == block_size * 14):   
+                            
+                            # find the patient record
+                            current_patient = None
+                            for patient in self.hospital_patients:                        
+                                if patient['room_number'] == room_num:
+                                    current_patient = patient
+                                    break
+                            
+                            if current_patient:   
+                                
+                                # get the bed colouring
+                                if current_patient['disease_class'] == 'mild':
+                                    colour = self.green
+                                elif current_patient['disease_class'] == 'moderate':
+                                    colour = self.orange
+                                elif current_patient['disease_class'] == 'severe':
+                                    colour = self.red
+                                    
+                                # add their recovery time remaining
+                                if (x == block_size * 3) or (x == block_size * 13):
+                                    text = str(current_patient["recovery_time"])   
+                                    
+                                # add whether they have been diagnosed or not
+                                if (x == block_size * 4) or (x == block_size * 14):
+                                    text = "T" if current_patient["diagnosed"] else "D"   
+                    
+                    # add in doctors                
+                    doctor_count = 0
+                    if (y % (block_size * 3) == 0) and (x == block_size * 6 or x == block_size * 11):  
+                        
+                        staff_ids = self.room_arrangement[room_num]["staff_ids"]
+                        if len(staff_ids) > 0:
+                            
+                            # count in the doctors
+                            for stf in staff_ids:
+                                if stf in self.doctor_ids:
+                                    doctor_count += 1
+                            
+                            # display the number
+                            if doctor_count:
+                                text = str(doctor_count)
+                                colour = self.blue                                                    
+                    
+                    # add in nurses
+                    if (y % (block_size * 3) == block_size * 2) and (x == block_size * 5 or x == block_size * 12):#
+                    
+                        staff_ids = self.room_arrangement[room_num]["staff_ids"]
+                        if len(staff_ids) > 0:
+                                   
+                            # display the number
+                            nurse_count = len(staff_ids) - doctor_count
+                            if nurse_count:
+                                text = str(nurse_count)
+                                colour = self.pale_blue                 
+                     
+                # add the main doors
+                if ((x == block_size * 8) or (x == block_size * 9)) and (y == block_size * 16):
+                     colour = self.brown 
+                    
+                # fill in the horizontal hospital walls
+                if (y % (block_size * 3) == block_size) and (x < block_size * 7 or x > block_size * 10):
+                    colour = self.light_orange   
+                
+                # fill in grass outside the hopsital
+                if (x < block_size * 2) or (x >= self.window_width - block_size * 2) or (y == 0) or (y == self.window_height - block_size):
+                    colour = self.grass_green      
+                
+                # add a path
+                if (y == self.window_height - block_size) and (x == block_size * 8 or x == block_size * 9):
+                    colour = self.sand_yellow                
+                
+                # create the rect for the grid
+                rect = pygame.Rect(x, y, block_size, block_size)
+                
+                # get the centred text                    
+                text_surface = self.font.render(text, True, self.black)
+                text_rect = text_surface.get_rect(center=(rect.x + block_size/2, rect.y + block_size/2))  
+                
+                # draw the square
+                pygame.draw.rect(self.screen, colour, rect)   
+                self.screen.blit(text_surface, text_rect)
+          
+        # update the display
+        pygame.display.update()
+        
+        # update the frame rate
+        self.clock.tick(self.fps)
+        
+        
+    def close_display(self):
+        
+        # shut the display window
+        pygame.display.quit()
             
         
 if __name__ == "__main__": 
     
+    # test parameters
     test_days = 10
     staff_number = 10
-    seeds = 1000
+    seeds = 1
+    render = True
+    
+    # print logging
     display = False
     
     for seed in range(seeds):
     
         # initialise the environment
-        env = hospital_env()
-        
-        print('Seed {}'.format(seed))
+        env = hospital_env(render=render,
+                           seed=seed,
+                           max_timestep=test_days)
         
         for days in range(test_days):
         
@@ -338,4 +561,3 @@ if __name__ == "__main__":
             print('Total days waiting: {}'.format(env.total_days_waited))
             print('-------------------------------------------')        
     
-        

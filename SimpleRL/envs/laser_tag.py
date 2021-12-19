@@ -24,7 +24,8 @@ from SimpleRL.envs.base import environment_base
 from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
 
 class laser_tag_env(environment_base):
-
+    
+    # TODO: is it really necessary to have multi and single action space -> I don't think so
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1, render_mode="default"):
