@@ -19,15 +19,14 @@ import numpy as np
 import pygame
 import os
 
-from SimpleRL.envs.base import environment_base 
-from SimpleRL.utils.laser_tag_utils import generate_scenario, shortest_path
-from SimpleRL.utils.video import init_video, save_frames, create_video
+from SimpleRL.envs import environment_base 
+from SimpleRL.utils import generate_scenario, shortest_path
+from SimpleRL.utils import init_video, save_frames, create_video
 
 class laser_tag_env(environment_base):
     
     # TODO: is it really necessary to have multi and single action space -> I don't think so
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: test new video function
     
     def __init__(self, render=False, seed=None, action_mode="default", enemy_mode="default", difficulty="hard", lives=1, render_mode="default"):
         
@@ -109,7 +108,6 @@ class laser_tag_env(environment_base):
         self.enemy_param = 2
         self.terrain_param = 3
         self.empty_param = 0
-        self.display_pause = 0.25
         
         # Initialise the environment
         self.bullet_path = None # for displaying the bullets path
@@ -135,7 +133,7 @@ class laser_tag_env(environment_base):
             self.window_height = 400
             
             # get the screen
-            self.init_display() 
+            self._init_display() 
             
             # set the fps
             self.fps = 5
@@ -171,37 +169,37 @@ class laser_tag_env(environment_base):
         self.check_discrete_input(player_action)  
         
         # update the grid according to the player move
-        reward, done, info = self.update_grid(action=player_action)
+        reward, done, info = self._update_grid(action=player_action)
         
         # display the map
         if self.render:
-            self.display()
+            self._display()
           
         # check if the episode has terminated
         if not done:
             
             # get the computer action
             if self.enemy_mode == "default":
-                computer_action = self.get_computer_action()                  
-                reward, done, info = self.update_grid(action=computer_action)  
+                computer_action = self._get_computer_action()                  
+                reward, done, info = self._update_grid(action=computer_action)  
                 
                 # display the map
                 if self.render:
-                    self.display()                
+                    self._display()                
             
             # get the action of another network
             elif self.enemy_mode == "adversarial":       
                 pass
                
         if done and self.render: 
-            self.close_display()         
+            self._close_display()         
                  
         return self.grid_map.flatten(), reward, done, info
     
     def sample_discrete_action(self):
         return np.random.randint(self.action_num - 1, size=self.action_dim)
     
-    def update_grid(self, action):
+    def _update_grid(self, action):
         
         # 25 actions --------        
         #      NO|LM|UM|RM|DM
@@ -242,7 +240,7 @@ class laser_tag_env(environment_base):
             # get the grid value of the move           
             final_player_pos = player_pos + chosen_move   
                         
-            valid_move = self.is_move_valid(final_player_pos, self.grid_map)
+            valid_move = self._is_move_valid(final_player_pos, self.grid_map)
             
             # Update the grid if the move is valid
             if valid_move:
@@ -261,7 +259,7 @@ class laser_tag_env(environment_base):
             chosen_move = move_direction[shot_action[0] - 1, :]
             
             # get the outcome of the shot
-            reward, done, info = self.get_shot_trajectory(chosen_move, player_pos, self.grid_map, self.current_player)
+            reward, done, info = self._get_shot_trajectory(chosen_move, player_pos, self.grid_map, self.current_player)
             
             # if the player has been shot remove them
             if done:
@@ -293,7 +291,7 @@ class laser_tag_env(environment_base):
                 
         return reward, done, info    
     
-    def get_shot_trajectory(self, chosen_move, current_player_pos, grid_map, current_player):
+    def _get_shot_trajectory(self, chosen_move, current_player_pos, grid_map, current_player):
                 
         # get the player value
         if current_player == self.player_param:
@@ -339,7 +337,7 @@ class laser_tag_env(environment_base):
             
         return reward, done, info
     
-    def is_move_valid(self, final_player_pos, grid_map):   
+    def _is_move_valid(self, final_player_pos, grid_map):   
         
         # assign the new player position
         row, col = final_player_pos          
@@ -353,7 +351,7 @@ class laser_tag_env(environment_base):
                 
         return False     
     
-    def get_computer_action(self):
+    def _get_computer_action(self):
         
         # select a random action in the case the agent difficulty is set
         random_num = np.random.uniform(0, 1, 1)        
@@ -379,7 +377,7 @@ class laser_tag_env(environment_base):
         for shot_direction in range(directions.shape[0]):
             
             #  check if the game could conclude with a shot            
-            _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map, self.current_player)
+            _, done, _ = self._get_shot_trajectory(directions[shot_direction, :], computer_pos, self.grid_map, self.current_player)
             
             # select the concluding action
             if done: 
@@ -405,7 +403,7 @@ class laser_tag_env(environment_base):
             final_computer_pos =  computer_pos + chosen_move
             
             # Check if the move is valid
-            valid_move = self.is_move_valid(final_computer_pos, self.grid_map)
+            valid_move = self._is_move_valid(final_computer_pos, self.grid_map)
             
             #  check if the game could conclude with a move-shot  
             if valid_move:
@@ -418,7 +416,7 @@ class laser_tag_env(environment_base):
                 temp_grid_map[computer_pos[0], computer_pos[1]] = 0   
                 
                 for shot_direction in range(directions.shape[0]):
-                    _, done, _ = self.get_shot_trajectory(directions[shot_direction, :], final_computer_pos, temp_grid_map, self.current_player)
+                    _, done, _ = self._get_shot_trajectory(directions[shot_direction, :], final_computer_pos, temp_grid_map, self.current_player)
                     
                     # select the concluding action
                     if done: 
@@ -465,7 +463,7 @@ class laser_tag_env(environment_base):
                 final_player_pos =  player_pos + play_chosen_move
                 
                 # Check if the move is valid
-                valid_player_move = self.is_move_valid(final_player_pos, temp_grid_map)
+                valid_player_move = self._is_move_valid(final_player_pos, temp_grid_map)
                 
                 if valid_player_move:
                     
@@ -543,7 +541,7 @@ class laser_tag_env(environment_base):
             return np.array([move_action, 0], dtype=np.int32)
 
             
-    def init_display(self):
+    def _init_display(self):
         
         # quit any previous games
         pygame.display.quit()
@@ -558,7 +556,7 @@ class laser_tag_env(environment_base):
         self.screen = pygame.display.set_mode([self.window_height, self.window_width])
         
     
-    def display(self):   
+    def _display(self):   
         
         # quit the game
         for event in pygame.event.get():
@@ -628,7 +626,7 @@ class laser_tag_env(environment_base):
         # update the frame rate
         self.clock.tick(self.fps)
         
-    def close_display(self):
+    def _close_display(self):
         
         # shut the display window
         pygame.display.quit()

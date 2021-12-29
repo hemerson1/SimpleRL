@@ -24,17 +24,18 @@ Patients must be first diagnosed and then assigned to the relevant treatment.
 import numpy as np
 import pygame
 import os
+import math
 
-from SimpleRL.utils.hospital_utils import generate_patient, generate_staff, generate_rooms
-from SimpleRL.utils.video import init_video, save_frames, create_video
+from SimpleRL.utils import generate_patient, generate_staff, generate_rooms
+from SimpleRL.utils import init_video, save_frames, create_video
 
 class hospital_env:
     def __init__(self, render=False, seed=None, max_timestep=180, render_mode="default"):
         
-        # TODO: putting all staff in room 0 is enough to get perfect score
         # TODO: perform general optimisation
         # TODO: optimise the image display code to remove long conditional statements
         # TODO: ensure that all the inputs are correct
+        # TODO: may need to test the difficulty of this environment
         
         # Ensure the render_mode for the environment is valid
         valid_render = ["default", "video"]
@@ -68,6 +69,8 @@ class hospital_env:
         
         # define the patient paramaters
         self.patient_spawn_prob = 1.0 # probability of patient per timestep 
+        self.patient_spawn_mean = 1.0
+        self.patient_spawn_std = 1.0
         
         # define the staff parameters (for doctors and nurses)
         self.staff_number = 10 # number of staff at the hospital
@@ -102,7 +105,7 @@ class hospital_env:
             self.window_height = 414
             
             # get the screen
-            self.init_display() 
+            self._init_display() 
             
             # set the fps
             self.fps = 1
@@ -267,45 +270,49 @@ class hospital_env:
                     
                             
         # generate a patient ----------------------------------------
-              
-        if np.random.uniform(0, 1, 1) < self.patient_spawn_prob and len(self.hospital_patients) < self.number_rooms:
-            
-            # create new patient
-            new_patient = generate_patient(
-                disease_classification=self.disease_classification,
-                illness_likelihood=self.illness_likelihood, 
-                death_probs=self.death_probs, 
-                recovery_time=self.recovery_time, 
-                id_number = self.current_patient_id
-                )
-            
-            # check if hospital is at max capacity
-            if len(self.hospital_patients) <= self.number_rooms:
         
-                # add patients to the rooms
-                for room in self.room_arrangement:
-                    
-                    # add patient ID to room and update current_id
-                    if room['patient_id'] == None:
+        # determine how many patient spawn this turn
+        num_patient_spawn = max(math.ceil(np.random.normal(self.patient_spawn_mean, self.patient_spawn_std, 1)[0]), 0)          
+        if len(self.hospital_patients) + (num_patient_spawn - 1) < self.number_rooms:
+            
+            for patient_spawn in range(num_patient_spawn):
+            
+                # create new patient
+                new_patient = generate_patient(
+                    disease_classification=self.disease_classification,
+                    illness_likelihood=self.illness_likelihood, 
+                    death_probs=self.death_probs, 
+                    recovery_time=self.recovery_time, 
+                    id_number = self.current_patient_id
+                    )
+                
+                # check if hospital is at max capacity
+                if len(self.hospital_patients) <= self.number_rooms:
+            
+                    # add patients to the rooms
+                    for room in self.room_arrangement:
                         
-                        # add patient id to room
-                        room['patient_id'] = self.current_patient_id
-                        
-                        # add room number to patient
-                        new_patient['room_number'] = room['room_number']
-                        
-                        # add patient to the hospital list
-                        self.hospital_patients.append(new_patient)
-                        
-                        # update patient_id
-                        self.current_patient_id += 1
-                        
-                        break
+                        # add patient ID to room and update current_id
+                        if room['patient_id'] == None:
+                            
+                            # add patient id to room
+                            room['patient_id'] = self.current_patient_id
+                            
+                            # add room number to patient
+                            new_patient['room_number'] = room['room_number']
+                            
+                            # add patient to the hospital list
+                            self.hospital_patients.append(new_patient)
+                            
+                            # update patient_id
+                            self.current_patient_id += 1
+                            
+                            break
                 
         # display the hospital ------------------------------------
         
         if self.render:
-            self.display()            
+            self._display()            
                 
         # visualise the next state --------------------------------
         
@@ -346,7 +353,7 @@ class hospital_env:
             
             # close the pygame window
             if self.render:
-                self.close_display()
+                self._close_display()
         
         # get additional info ------------------------------------
         
@@ -354,7 +361,7 @@ class hospital_env:
             
         return state, reward, done, info     
     
-    def init_display(self):
+    def _init_display(self):
         
         # quit any previous games
         pygame.display.quit()
@@ -369,7 +376,7 @@ class hospital_env:
         self.screen = pygame.display.set_mode([self.window_height, self.window_width])
         
         
-    def display(self):   
+    def _display(self):   
         
         # quit the game
         for event in pygame.event.get():
@@ -422,10 +429,9 @@ class hospital_env:
                 row = int(y / (block_size * 3)) - 1
                 
                 # calculate the room_num
-                room_num = row + column * 5
-            
+                room_num = row + column * 5            
                 
-                if y > block_size and y < self.window_width - block_size:
+                if y > block_size and y < (self.window_width - block_size):
                     
                     # add in patients                
                     if (y % (block_size * 3) == 0) and (x == block_size * 3 or x == block_size * 4 or x == block_size * 13 or x == block_size * 14):   
@@ -473,13 +479,18 @@ class hospital_env:
                                 colour = self.blue                                                    
                     
                     # add in nurses
-                    if (y % (block_size * 3) == block_size * 2) and (x == block_size * 5 or x == block_size * 12):#
-                    
-                        staff_ids = self.room_arrangement[room_num]["staff_ids"]
+                    nurse_count = 0
+                    if (y % (block_size * 3) == block_size * 2) and (x == block_size * 5 or x == block_size * 12):
+                        
+                        # + 1 needed with room_num for nurses to be added in the correct space
+                        staff_ids = self.room_arrangement[room_num + 1]["staff_ids"]
                         if len(staff_ids) > 0:
-                                   
-                            # display the number
-                            nurse_count = len(staff_ids) - doctor_count
+                            
+                            # count in the doctors
+                            for stf in staff_ids:
+                                if stf not in self.doctor_ids:
+                                    nurse_count += 1
+                            
                             if nurse_count:
                                 text = str(nurse_count)
                                 colour = self.pale_blue                 
@@ -522,7 +533,7 @@ class hospital_env:
         self.clock.tick(self.fps)
         
         
-    def close_display(self):
+    def _close_display(self):
         
         # shut the display window
         pygame.display.quit()
@@ -554,7 +565,6 @@ if __name__ == "__main__":
         
             # test action with each element representing a person 
             # and the idx representing their room assignment        
-            
             action = np.random.randint(10, size=10)  
             
             # take a step
