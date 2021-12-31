@@ -555,7 +555,7 @@ class laser_tag_env(environment_base):
         self.clock = pygame.time.Clock()
         
         # create the screen
-        self.screen = pygame.display.set_mode([self.window_height, self.window_width])
+        self.screen = pygame.display.set_mode([self.window_width, self.window_height])
         
     
     def _display(self):   

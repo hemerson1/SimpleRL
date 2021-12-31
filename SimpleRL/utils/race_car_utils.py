@@ -23,6 +23,9 @@ import matplotlib.pyplot as plt
 # Used for BSpline interpolation and evaluation:
 # https://github.com/XuejiaoYuan/BSpline
 
+# Used for car dynamics:
+# https://github.com/mdeyo/simple-pycar
+
 # TODO: keep an eye out for bug which gives the track a spotted appearance
 # TODO: comment all the bspline curve functions and change the variables to be more readable
 
@@ -526,40 +529,27 @@ def get_checkpoints(track_points, n_checkpoints):
 Function for drawing the race track map using a set of track points and some 
 checkpoint markers.
 """
-def draw_screen(f_points, checkpoints, screen, track_width, start_tile_height, checkpoint_margin,
-                checkpoint_angle_offset, track_colour, checkpoint_colour, start_colour):
+def draw_map(f_points, checkpoints, screen, track_width, checkpoint_margin,
+                checkpoint_angle_offset, track_colour, checkpoint_colour, start_colour, background_colour):
     
-    title = "Race Track Environment"
+    # fill in the background    
+    screen.fill(background_colour)
     
     # draw the road
-    draw_track(screen, track_colour, f_points, track_width=track_width,
-               start_tile_height=start_tile_height)
+    draw_track(screen, track_colour, f_points, track_width=track_width)
 
     # draw the checkpoints
     for checkpoint_idx, checkpoint in enumerate(checkpoints):
         draw_checkpoint(screen, f_points, checkpoint, checkpoint_idx, checkpoint_margin=checkpoint_margin,track_width=track_width, 
                         checkpoint_angle_offset=checkpoint_angle_offset, checkpoint_colour=checkpoint_colour, start_colour=start_colour)
     
-    # set the window title
-    pygame.display.set_caption(title)
-    
-    # loop over display
-    while True: 
-        
-        # exit the display
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                break
-        
-        # update the display
-        pygame.display.update()
+    return screen
         
 """
 Draw the road onto the map given a set of point specifying the location of the 
 track. 
 """
-def draw_track(surface, color, points, track_width, start_tile_height):
+def draw_track(surface, color, points, track_width):
     
     radius = track_width // 2
     
@@ -594,7 +584,7 @@ def draw_checkpoint(track_surface, points, checkpoint, checkpoint_idx, checkpoin
     # draw checkpoint    
     checkpoint = draw_rectangle((radius * 2, 5), colour, line_thickness=1, fill=False)    
     rot_checkpoint = pygame.transform.rotate(checkpoint, -angle)
-    check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0])*n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)    
+    check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0]) * n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1]) * n_vec_p[1] * radius)       
     track_surface.blit(rot_checkpoint, check_pos)
 
 """
@@ -606,7 +596,186 @@ def draw_rectangle(dimensions, color, line_thickness=1, fill=False):
         filled = 0
     rect_surf = pygame.Surface(dimensions, pygame.SRCALPHA)
     pygame.draw.rect(rect_surf, color, (0, 0, dimensions[0], dimensions[1]), filled)
+    
     return rect_surf 
+
+# Updating the car ----------------------------------------------------------
+
+class simulate_car:
+    
+    def __init__(self, fps=30, starting_position=(0, 0), starting_angle=0):
+        
+        self.fps = 30
+        
+        # intialise the car parameters
+        self.car_dimensions = [20, 8]
+        self.max_steering_angle = math.pi / 3
+        self.acceleration_rate = 10
+        self.velocity_dampening = 30 # 0.1
+        self.max_speed = 300
+        self.steering_elasticity = 5 / self.fps  
+        
+        # reset the parameters
+        self.reset(starting_position=starting_position, starting_angle=starting_angle)
+        
+    """
+    Reset the car parameters
+    """
+    def reset(self, starting_position, starting_angle):
+        
+        # initialise the car parameters
+        self.position = list(starting_position)
+        self.speed = 0
+        self.velocity = [0, 0]
+        self.angle = starting_angle
+        self.steering_angle = 0
+       
+    """
+    Given an action update the cars position, angle and speed
+    """
+    def process_action(self, action):        
+        
+        # actions:
+        # 0 = decelerate | 1 = accelerate | 2 = left | 3 = right
+        
+        # decelerate the car
+        if action[0]:
+            self.accelerate(-1)
+        
+        # accelerate the car
+        if action[1]:
+            self.accelerate(+1)
+            
+        # turn the car left
+        if action[2]:
+            self.turn(-1)
+        
+        # turn the car right
+        if action[3]:
+            self.turn(+1)   
+        
+        # update the car's current position
+        self.update_position()
+    
+    """
+    Update the speed of the car
+    """            
+    def accelerate(self, velocity_change):
+        
+        dv = velocity_change
+        
+        # move the car forward
+        if dv > 0:  
+            self.speed += self.acceleration_rate * dv
+            self.speed = min(self.speed, self.max_speed)
+            
+        # reverse the car    
+        elif dv < 0:
+            self.speed += self.acceleration_rate * dv            
+            self.speed = max(self.speed, -self.max_speed)
+    
+    """
+    Update the turning angle of the car
+    """            
+    def turn(self, direction):
+        
+        # update the steering angle
+        new_steering_angle = self.steering_angle + direction * (math.pi / 20) * 20
+        print(new_steering_angle)
+        
+        # restrict the steering angle to a confined range
+        if new_steering_angle > self.max_steering_angle:
+            self.steering_angle = self.max_steering_angle
+        elif new_steering_angle < -self.max_steering_angle:
+            self.steering_angle = -self.max_steering_angle
+            
+        # set the new angle    
+        else: self.steering_angle = new_steering_angle
+      
+    """
+    Update the position of the car and account for dampening
+    """        
+    def update_position(self):
+        
+        delta = 1 / self.fps
+        
+        # adjust the car's angle using the modified steering angle
+        self.angle += self.steering_angle * delta * self.speed / 100
+        
+        # calculate the velocity and hence its current position    
+        self.velocity[0] = math.cos(self.angle) * self.speed
+        self.velocity[1] = math.sin(self.angle) * self.speed
+        self.position[0] += self.velocity[0] * delta
+        self.position[1] += self.velocity[1] * delta
+        
+        # account for wheel dampening
+        self.dampen_steering()
+        self.dampen_speed()
+        
+    """
+    Dampen the cars steering
+    """    
+    def dampen_steering(self):
+    
+        # steering is already at 0
+        if self.steering_angle == 0:
+            self.steering_angle = 0
+        
+        # reduce right steering
+        elif self.steering_angle > 0:
+            self.steering_angle = self.steering_angle - self.steering_elasticity
+            
+            if self.steering_angle <= 0:
+                self.steering_angle = 0
+        
+        # reduce left steering
+        elif self.steering_angle < 0:
+            self.steering_angle = self.steering_angle + self.steering_elasticity
+            
+            if self.steering_angle >= 0:
+                self.steering_angle= 0
+                
+    """
+    Dampen the speed of the car
+    """    
+    def dampen_speed(self):
+        
+        delta = 1 / self.fps
+        
+        # if stopped keep speed constant
+        if self.speed == 0:
+            self.speed = 0
+        
+        # reduce forward speed
+        elif self.speed > 0:
+            self.speed = self.speed - self.velocity_dampening * delta * (self.speed / 10)
+            
+            if self.speed <= 0:
+                self.speed = 0
+                
+        # reduce backward speed      
+        elif self.speed < 0:
+            self.speed = self.speed - self.velocity_dampening * delta * (self.speed / 10)
+            
+            if self.speed >= 0:
+                self. speed = 0
+                
+    
+    def render_car(self, screen, car_colour):
+        
+        car_surface = draw_rectangle(self.car_dimensions, car_colour, line_thickness=1, fill=True)
+        
+        
+        rotated_car = pygame.transform.rotate(car_surface, -self.angle)
+        
+        
+        # check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0]) * n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)  
+        
+        screen.blit(rotated_car, self.position)
+        
+        return screen
+        
+        
         
 if __name__ == '__main__':
     
@@ -634,8 +803,6 @@ if __name__ == '__main__':
     if display:    
         pygame.init()
         screen = pygame.display.set_mode((width, height))
-        background_color = grass_green
-        screen.fill(background_color)
         
     for seed in range(seeds):
         
@@ -651,8 +818,11 @@ if __name__ == '__main__':
         
         # draw the screen 
         if display:
-            draw_screen(f_points, checkpoints, screen, track_width=track_width, start_tile_height=start_tile_height, checkpoint_margin=checkpoint_margin, 
-                        checkpoint_angle_offset=checkpoint_angle_offset, track_colour=grey, start_colour=red, checkpoint_colour=blue)
+            draw_map(f_points, checkpoints, screen, track_width=track_width, checkpoint_margin=checkpoint_margin, 
+                        checkpoint_angle_offset=checkpoint_angle_offset, track_colour=grey, start_colour=red, checkpoint_colour=blue, background_colour=grass_green)
+            
+            
+            pygame.display.update()
     
     
 
