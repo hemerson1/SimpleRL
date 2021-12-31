@@ -367,7 +367,9 @@ class hospital_env:
         pygame.display.quit()
         
         # initialise pygame
-        pygame.init()    
+        pygame.init()  
+        
+        pygame.display.set_caption("Hospital Environment")
         
         # initialise the clock
         self.clock = pygame.time.Clock()

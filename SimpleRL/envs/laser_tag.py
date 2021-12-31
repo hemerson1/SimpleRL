@@ -476,7 +476,7 @@ class laser_tag_env(environment_base):
                     for player_shot_direction in range(directions.shape[0]):
                         
                         #  check if the game could conclude with a shot            
-                        _, done, _ = self.get_shot_trajectory(directions[player_shot_direction, :], final_player_pos, player_temp_grid_map, temp_player)
+                        _, done, _ = self._get_shot_trajectory(directions[player_shot_direction, :], final_player_pos, player_temp_grid_map, temp_player)
                         
                         # mark this computer move as unsafes
                         if done:              
@@ -548,6 +548,8 @@ class laser_tag_env(environment_base):
         
         # initialise pygame
         pygame.init()    
+        
+        pygame.display.set_caption("Laser Tag Environment")
         
         # initialise the clock
         self.clock = pygame.time.Clock()

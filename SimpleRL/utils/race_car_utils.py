@@ -8,6 +8,8 @@ Created on Wed Dec 29 16:39:19 2021
 
 import numpy as np
 import math
+import pygame 
+import random 
 
 # TESTING
 import matplotlib.pyplot as plt
@@ -21,85 +23,60 @@ import matplotlib.pyplot as plt
 # Used for BSpline interpolation and evaluation:
 # https://github.com/XuejiaoYuan/BSpline
 
-def generate_track():
-    pass
-
-import pygame, sys
-import random 
-
-# Screen dimensions
-WIDTH = 800 
-HEIGHT = 600
-
-###
-# Drawing
-###
-TITLE = 'Procedural Race Track'
-
-START_TILE_HEIGHT = 10
-START_TILE_WIDTH = 10
-
-# Colors
-WHITE = [255, 255, 255]
-BLACK = [0, 0, 0]
-RED = [255, 0, 0]
-BLUE = [0, 0, 255]
-GRASS_GREEN = [58, 156, 53]
-GREY = [186, 182, 168]
-
-KERB_PLACEMENT_X_CORRECTION = 5
-KERB_PLACEMENT_Y_CORRECTION = 4
-KERB_POINT_ANGLE_OFFSET = 5
-STEP_TO_NEXT_KERB_POINT = 4
-
-CHECKPOINT_POINT_ANGLE_OFFSET = 3
-CHECKPOINT_MARGIN = 5
-
-TRACK_POINT_ANGLE_OFFSET = 3
-
-###
-# Track parameters
-###
-
-# Boundaries for the numbers of points that will be randomly 
-# generated to define the initial polygon used to build the track
-MIN_POINTS = 20
-MAX_POINTS = 30
-
-SPLINE_POINTS = 1000
-
-# Margin between screen limits and any of the points that shape the
-# initial polygon
-MARGIN = 50
-# minimum distance between points that form the track skeleton
-MIN_DISTANCE = 100 # 20
-# Maximum midpoint displacement for points placed after obtaining the initial polygon
-MAX_DISPLACEMENT = 80
-# Track difficulty
-DIFFICULTY = 0.1
-# min distance between two points that are part of thr track skeleton
-DISTANCE_BETWEEN_POINTS = 20
-# Maximum corner allowed angle
-MAX_ANGLE = 90
-
-# Angle boundaries used to determine the corners that will have a kerb
-MIN_KERB_ANGLE = 20
-MAX_KERB_ANGLE = 90
-
-TRACK_WIDTH = 40
-
-FULL_CORNER_NUM_POINTS = 17
-
-###
-# Game parameters
-###
-N_CHECKPOINTS = 10
+# TODO: keep an eye out for bug which gives the track a spotted appearance
+# TODO: comment all the bspline curve functions and change the variables to be more readable
 
 
-####
-## logical functions
-####
-def random_points(min_p=MIN_POINTS, max_p=MAX_POINTS, margin=MARGIN, min_distance=MIN_DISTANCE):
+# Creating the Track ----------------------------------------------------------
+
+"""
+Function for generating the points of a track and several checkpoints mapped
+evenly along it.
+"""
+def generate_track(track_width, width, height):
+    
+    # parameters for random points
+    min_points = 20
+    max_points = 30
+    margin = 50
+    min_distance = 100 
+    
+    # parameters for shape_track
+    difficulty = 0.1
+    max_displacement = 80
+    max_angle = 90
+    distance_between_points = 20
+    
+    # parameters for smooth_track
+    spline_points = 1000
+    
+    # parameters for get checkpoints
+    number_checkpoints = 10    
+
+    # generate a set of random points
+    points = random_points(min_p=min_points, max_p=max_points, margin=margin,
+                           min_distance=min_distance, width=width, height=height)
+    
+    # calculate the convex hull of the random points
+    hull_points = convex_hull(points)    
+    
+    # get the points of the track
+    track_points = shape_track(hull_points, difficulty=difficulty, max_displacement=max_displacement, margin=margin, track_width=track_width,
+                               max_angle=max_angle, distance_between_points=distance_between_points, width=width, height=height)
+    
+    # smooth the track points
+    f_points = smooth_track(track_points, spline_points=spline_points)
+    
+    # get the checkpoint locations 
+    checkpoints = get_checkpoints(f_points, n_checkpoints=number_checkpoints)
+    
+    return f_points, checkpoints
+
+
+"""
+Generate a random set of points subject to the outlined constraints
+"""
+def random_points(min_p, max_p, margin, min_distance, width, height):
     
     # get number of points
     pointCount = random.randrange(min_p, max_p + 1, 1)
@@ -108,8 +85,8 @@ def random_points(min_p=MIN_POINTS, max_p=MAX_POINTS, margin=MARGIN, min_distanc
     for i in range(pointCount):
         
         # get x and y of points
-        x = random.randrange(margin, WIDTH - margin + 1, 1)
-        y = random.randrange(margin, HEIGHT -margin + 1, 1)
+        x = random.randrange(margin, width - margin + 1, 1)
+        y = random.randrange(margin, height -margin + 1, 1)
         
         # remove any points which are less than the minimum distance
         distances = list(filter(lambda x: x < min_distance, [math.sqrt((p[0]-x)**2 + (p[1]-y)**2) for p in points]))
@@ -120,6 +97,10 @@ def random_points(min_p=MIN_POINTS, max_p=MAX_POINTS, margin=MARGIN, min_distanc
             
     return np.array(points)
 
+
+"""
+Generate a convex hull from a set of points
+"""
 def convex_hull(points):
     
     hull_points = []
@@ -168,7 +149,8 @@ def convex_hull(points):
             
             # get the direction between p1 and p2
             else:
-                direction = get_orientation(point, far_point, p2)
+                direction  = (((p2[0] - point[0]) * (far_point[1] - point[1])) 
+                              - ((far_point[0] - point[0]) * (p2[1] - point[1])))
                 if direction > 0:                    
                     far_point = p2
                     
@@ -177,7 +159,12 @@ def convex_hull(points):
         
     return np.array(hull_points[:-1])
 
-def shape_track(track_points, difficulty=DIFFICULTY, max_displacement=MAX_DISPLACEMENT, margin=MARGIN, track_width=TRACK_WIDTH):
+"""
+Take a convex hull and ensure that all the points are sufficiently spaced, fit 
+within the confines of the screen and do not incorporate any bends that are 
+too sharp.
+"""
+def shape_track(track_points, difficulty, max_displacement, margin, track_width, max_angle, distance_between_points, width, height):
     
     # create a list of zero pairs twice as long as hull points
     track_set = [[0,0] for i in range(len(track_points) * 2)] 
@@ -201,8 +188,8 @@ def shape_track(track_points, difficulty=DIFFICULTY, max_displacement=MAX_DISPLA
     
     # ensure angles are suitable and points are sufficiently far apart
     for i in range(3):
-        track_set = fix_angles(track_set)
-        track_set = push_points_apart(track_set)
+        track_set = fix_angles(track_set, max_angle=max_angle)
+        track_set = push_points_apart(track_set, distance=distance_between_points)
         
     # ensure all the points are within the screen limits
     final_set = []
@@ -211,14 +198,14 @@ def shape_track(track_points, difficulty=DIFFICULTY, max_displacement=MAX_DISPLA
         # if outside x dimension including track width
         if point[0] - track_width < margin:
             point[0] = margin + track_width            
-        elif point[0] + track_width > (WIDTH - margin):
-            point[0] = (WIDTH - margin) - track_width
+        elif point[0] + track_width > (width - margin):
+            point[0] = (width - margin) - track_width
         
         # if outside y dimension including track width        
         if point[1] - track_width < margin:
             point[1] = margin + track_width
-        elif point[1] + track_width > HEIGHT - margin:
-            point[1] = (HEIGHT - margin) - track_width
+        elif point[1] + track_width > height - margin:
+            point[1] = (height - margin) - track_width
             
         final_set.append(point)
      
@@ -227,6 +214,9 @@ def shape_track(track_points, difficulty=DIFFICULTY, max_displacement=MAX_DISPLA
         
     return final_set
 
+"""
+Generate a random unit vector of dims-dimensions
+"""
 def make_rand_vector(dims):
     
     # create a random dims-dimensional vector
@@ -234,7 +224,12 @@ def make_rand_vector(dims):
     mag = sum(x**2 for x in vec) ** .5
     return [x/mag for x in vec]
 
-def fix_angles(points, max_angle=MAX_ANGLE):
+
+"""
+Take a set of angles and adjust them such that they do not exceed a maximum
+angle
+"""
+def fix_angles(points, max_angle):
     
     for i in range(len(points)):
         
@@ -293,8 +288,11 @@ def fix_angles(points, max_angle=MAX_ANGLE):
         
     return points
 
-
-def push_points_apart(points, distance=DISTANCE_BETWEEN_POINTS):
+"""
+Take a set of points and ensure that they are a minimum distance apart from 
+one another
+"""
+def push_points_apart(points, distance):
     
     for i in range(len(points)):
         for j in range(i+1, len(points)):
@@ -327,106 +325,17 @@ def push_points_apart(points, distance=DISTANCE_BETWEEN_POINTS):
                     
     return points
 
-def get_checkpoints(track_points, n_checkpoints=N_CHECKPOINTS):
-    # get step between checkpoints
-    checkpoint_step = len(track_points) // n_checkpoints
-    # get checkpoint track points
-    checkpoints = []
-    for i in range(N_CHECKPOINTS):
-        index = i * checkpoint_step
-        checkpoints.append(track_points[index])
-    return checkpoints
-
-####
-## drawing functions
-####
-
-
-def draw_track(surface, color, points):
-    
-    radius = TRACK_WIDTH // 2
-    
-    # draw track
-    chunk_dimensions = (radius * 2, radius * 2)
-    for point in points:
-        blit_pos = (point[0] - radius, point[1] - radius)
-        track_chunk = pygame.Surface(chunk_dimensions, pygame.SRCALPHA)
-        pygame.draw.circle(track_chunk, color, (radius, radius), radius)
-        surface.blit(track_chunk, blit_pos)
-        
-    starting_grid = draw_starting_grid(radius*2)
-    
-    # rotate and place starting grid
-    offset = TRACK_POINT_ANGLE_OFFSET
-    vec_p = [points[offset][1] - points[0][1], -(points[offset][0] - points[0][0])]
-    n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]), vec_p[1] / math.hypot(vec_p[0], vec_p[1])]
-    
-    # compute angle
-    angle = math.degrees(math.atan2(n_vec_p[1], n_vec_p[0]))
-    rot_grid = pygame.transform.rotate(starting_grid, -angle)
-    start_pos = (points[0][0] - math.copysign(1, n_vec_p[0])*n_vec_p[0] * radius, points[0][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)    
-    surface.blit(rot_grid, start_pos)
-
-def draw_starting_grid(track_width):    
-    starting_grid = pygame.Surface((track_width, START_TILE_HEIGHT ), pygame.SRCALPHA)
-    return starting_grid
-
-def draw_checkpoint(track_surface, points, checkpoint, checkpoint_idx):
-    # given the main point of a checkpoint, compute and draw the checkpoint box
-    margin = CHECKPOINT_MARGIN
-    radius = TRACK_WIDTH // 2 + margin
-    offset = CHECKPOINT_POINT_ANGLE_OFFSET
-    check_index = points.index(checkpoint)
-    vec_p = [points[check_index + offset][1] - points[check_index][1], -(points[check_index+offset][0] - points[check_index][0])]
-    n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]), vec_p[1] / math.hypot(vec_p[0], vec_p[1])]
-    # compute angle
-    angle = math.degrees(math.atan2(n_vec_p[1], n_vec_p[0]))
-    
-    # set checkpoint colour for the start
-    if checkpoint_idx == 0: colour = RED
-    else: colour = BLUE
-    
-    # draw checkpoint    
-    checkpoint = draw_rectangle((radius*2, 5), colour, line_thickness=1, fill=False)    
-    rot_checkpoint = pygame.transform.rotate(checkpoint, -angle)
-    check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0])*n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)    
-    track_surface.blit(rot_checkpoint, check_pos)
-
-def draw_rectangle(dimensions, color, line_thickness=1, fill=False):
-    filled = line_thickness
-    if fill:
-        filled = 0
-    rect_surf = pygame.Surface(dimensions, pygame.SRCALPHA)
-    pygame.draw.rect(rect_surf, color, (0, 0, dimensions[0], dimensions[1]), filled)
-    return rect_surf
-
-def get_orientation(origin, p1, p2):
-    '''
-    Returns the orientation of the Point p1 with regards to Point p2 using origin.
-    Negative if p1 is clockwise of p2.
-    :param p1:
-    :param p2:
-    :return: integer
-    '''
-    difference = (
-        ((p2[0] - origin[0]) * (p1[1] - origin[1]))
-        - ((p1[0] - origin[0]) * (p2[1] - origin[1]))
-    )
-
-    return difference    
-
-
-def smooth_track(track_points):    
+"""
+Take a set of point and smooth the boundaries by approximating the shape
+using a B-spline function.
+"""
+def smooth_track(track_points, spline_points):    
     
     # get x and y in the appropriate format
     x, y = zip(*track_points)
     x, y = list(x), list(y)
     
-    k, H = 3, len(x) - 1
-    
-    print('D_n: {}'.format(len(x)))
-    print('H: {}'.format(H))
-    print('k: {}'.format(k))    
+    k, H = 3, len(x) - 1 
         
     # combine the lists
     combined_list = [x, y]
@@ -434,95 +343,36 @@ def smooth_track(track_points):
     p_centripetal = centripetal(len(x), combined_list)
     knot = knot_vector(p_centripetal, k, len(x))
     P_control = curve_approximation(D=combined_list, N=len(x), H=H, k=k, param=p_centripetal, knot=knot)
-
-    # P_control = combined_list
     
-    p_piece = np.linspace(0, 1, SPLINE_POINTS)
+    p_piece = np.linspace(0, 1, spline_points)
     p_centripetal_new = centripetal(H, P_control)
     knot_new = knot_vector(p_centripetal_new, k, H)
     P_piece = curve(P_control, H, k, p_piece, knot_new) 
     
-    return [(P_piece[0][idx], P_piece[1][idx]) for idx in range(len(P_piece[0]))]      
-    
+    return [(P_piece[0][idx], P_piece[1][idx]) for idx in range(len(P_piece[0]))]    
 
-####
-## Main function
-####
-def main(draw_checkpoints_in_track=True):
+"""
+Calculate a B-spline curve from a set of points
+"""
+def curve(control_points, n_points, degree, param, knot):
     
-    # initialise pygame
-    pygame.init()
-    
-    # set the screen
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    background_color = GRASS_GREEN
-    screen.fill(background_color)
-        
-    # set the seed
-    # random.seed(11)
-
-    # generate a set of random points
-    points = random_points()
-    
-    # calculate the convex hull of the random points
-    hull_points = convex_hull(points)    
-    
-    # get the points of the track
-    track_points = shape_track(hull_points)
-    
-    # smooth the track points
-    f_points = smooth_track(track_points)
-    
-    """    
-    x, y = zip(*f_points)    
-    plt.plot(y, x)
-    x_1, y_1 = zip(*track_points)  
-    plt.scatter(y_1, x_1)
-    plt.show()        
-    sladhjsasanda
-    """
-            
-    # draw the actual track (road, kerbs, starting grid)
-    draw_track(screen, GREY, f_points)
-    
-    # draw checkpoints
-    checkpoints = get_checkpoints(f_points)
-
-    if draw_checkpoints_in_track:
-        for checkpoint_idx, checkpoint in enumerate(checkpoints):
-            draw_checkpoint(screen, f_points, checkpoint, checkpoint_idx)
-    
-    pygame.display.set_caption(TITLE)
-    while True: # main loop
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-        pygame.display.update()
-        
-        
-def curve(P, N, k, param, knot):
-    '''
-    Calculate B-spline curve.
-    :param P: Control points
-    :param N: the number of control points
-    :param k: degree
-    :param param: parameters
-    :param knot: knot vector
-    :return: data point on the b-spline curve
-    '''
-    Nik = np.zeros((len(param), N))
+    Nik = np.zeros((len(param), n_points))
 
     for i in range(len(param)):
-        for j in range(N):
-            Nik[i][j] = BaseFunction(j, k+1, param[i], knot)
-    Nik[len(param)-1][N - 1] = 1
-    D = []
-    for i in range(len(P)):
-        D.append(np.dot(Nik, P[i]).tolist())
-    return D
+        for j in range(n_points):
+            Nik[i][j] = base_function(j, degree + 1, param[i], knot)
+            
+    Nik[len(param)-1][n_points - 1] = 1
+    
+    bspline_data = []
+    for i in range(len(control_points)):
+        bspline_data.append(np.dot(Nik, control_points[i]).tolist())
+    return bspline_data
 
-def BaseFunction(i, k, u, knot):
+"""
+Calculate a base_function using Cox-deBoor function
+"""
+def base_function(i, k, u, knot):
     '''
     Calculate base function using Cox-deBoor function.
     :param i: index of base function
@@ -543,14 +393,17 @@ def BaseFunction(i, k, u, knot):
         if not length1 and not length2:
             Nik_u = 0
         elif not length1:
-            Nik_u = (knot[i + k] - u) / length2 * BaseFunction(i + 1, k - 1, u, knot)
+            Nik_u = (knot[i + k] - u) / length2 * base_function(i + 1, k - 1, u, knot)
         elif not length2:
-            Nik_u = (u - knot[i]) / length1 * BaseFunction(i, k - 1, u, knot)
+            Nik_u = (u - knot[i]) / length1 * base_function(i, k - 1, u, knot)
         else:
-            Nik_u = (u - knot[i]) / length1 * BaseFunction(i, k - 1, u, knot) + \
-                    (knot[i + k] - u) / length2 * BaseFunction(i + 1, k - 1, u, knot)
+            Nik_u = (u - knot[i]) / length1 * base_function(i, k - 1, u, knot) + \
+                    (knot[i + k] - u) / length2 * base_function(i + 1, k - 1, u, knot)
     return Nik_u
 
+"""
+Calculate the B-spline parameters using the centripetal method
+"""
 def centripetal(n, P):
     '''
     Calculate parameters using the centripetal method.
@@ -574,6 +427,9 @@ def centripetal(n, P):
         
     return parameters[0]
 
+"""
+Generate a knot vector for the B-spline function
+"""
 def knot_vector(param, k, N):
     '''
     Generate knot vector.
@@ -597,6 +453,11 @@ def knot_vector(param, k, N):
         
     return knot[0]
 
+"""
+For a set of data points find a B-spline curve of a specified degree that contains
+the first and last data points and approximates data polygon in the sense of least
+squares.
+"""
 def curve_approximation(D, N, H, k, param, knot):
     '''
     Given a set of N data points, D0, D1, ..., Dn, a degree k,
@@ -627,7 +488,7 @@ def curve_approximation(D, N, H, k, param, knot):
         
         for i in range(N):
             for j in range(H):
-                Nik[i][j] = BaseFunction(j, k + 1, param[i], knot)
+                Nik[i][j] = base_function(j, k + 1, param[i], knot)
         # print(Nik)
 
         for j in range(1, N - 1):
@@ -640,7 +501,158 @@ def curve_approximation(D, N, H, k, param, knot):
         P.append(P_.tolist()[0])
 
     return P
+
+"""
+Divide a track specified by a set of point into n checkpoints
+"""
+def get_checkpoints(track_points, n_checkpoints):
+    
+    # get step between checkpoints
+    checkpoint_step = len(track_points) // n_checkpoints
+    
+    # get checkpoint track points
+    checkpoints = []
+    for i in range(n_checkpoints):
+        index = i * checkpoint_step
+        checkpoints.append(track_points[index])
+    return checkpoints
+
+
+# Drawing the track ---------------------------------------------------------
+
+# TODO: modify the drawing functions to fit more seemlessly with the environment
+
+"""
+Function for drawing the race track map using a set of track points and some 
+checkpoint markers.
+"""
+def draw_screen(f_points, checkpoints, screen, track_width, start_tile_height, checkpoint_margin,
+                checkpoint_angle_offset, track_colour, checkpoint_colour, start_colour):
+    
+    title = "Race Track Environment"
+    
+    # draw the road
+    draw_track(screen, track_colour, f_points, track_width=track_width,
+               start_tile_height=start_tile_height)
+
+    # draw the checkpoints
+    for checkpoint_idx, checkpoint in enumerate(checkpoints):
+        draw_checkpoint(screen, f_points, checkpoint, checkpoint_idx, checkpoint_margin=checkpoint_margin,track_width=track_width, 
+                        checkpoint_angle_offset=checkpoint_angle_offset, checkpoint_colour=checkpoint_colour, start_colour=start_colour)
+    
+    # set the window title
+    pygame.display.set_caption(title)
+    
+    # loop over display
+    while True: 
+        
+        # exit the display
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                break
+        
+        # update the display
+        pygame.display.update()
+        
+"""
+Draw the road onto the map given a set of point specifying the location of the 
+track. 
+"""
+def draw_track(surface, color, points, track_width, start_tile_height):
+    
+    radius = track_width // 2
+    
+    # draw track
+    chunk_dimensions = (radius * 2, radius * 2)
+    for point in points:
+        blit_pos = (point[0] - radius, point[1] - radius)
+        track_chunk = pygame.Surface(chunk_dimensions, pygame.SRCALPHA)
+        pygame.draw.circle(track_chunk, color, (radius, radius), radius)
+        surface.blit(track_chunk, blit_pos)
+        
+"""
+Draw the individual checkpoints including the starting point. 
+"""
+def draw_checkpoint(track_surface, points, checkpoint, checkpoint_idx, checkpoint_margin, track_width, checkpoint_angle_offset, start_colour, checkpoint_colour):
+    
+    # given the main point of a checkpoint, compute and draw the checkpoint box
+    margin = checkpoint_margin
+    radius = track_width // 2 + margin
+    offset = checkpoint_angle_offset
+    check_index = points.index(checkpoint)
+    vec_p = [points[check_index + offset][1] - points[check_index][1], -(points[check_index+offset][0] - points[check_index][0])]
+    n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]), vec_p[1] / math.hypot(vec_p[0], vec_p[1])]
+    
+    # compute angle
+    angle = math.degrees(math.atan2(n_vec_p[1], n_vec_p[0]))
+    
+    # set checkpoint colour for the start
+    if checkpoint_idx == 0: colour = start_colour
+    else: colour = checkpoint_colour
+    
+    # draw checkpoint    
+    checkpoint = draw_rectangle((radius * 2, 5), colour, line_thickness=1, fill=False)    
+    rot_checkpoint = pygame.transform.rotate(checkpoint, -angle)
+    check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0])*n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)    
+    track_surface.blit(rot_checkpoint, check_pos)
+
+"""
+Draw a rectangle of specified dimensions
+"""
+def draw_rectangle(dimensions, color, line_thickness=1, fill=False):
+    filled = line_thickness
+    if fill:
+        filled = 0
+    rect_surf = pygame.Surface(dimensions, pygame.SRCALPHA)
+    pygame.draw.rect(rect_surf, color, (0, 0, dimensions[0], dimensions[1]), filled)
+    return rect_surf 
         
 if __name__ == '__main__':
-    main(draw_checkpoints_in_track=True)
+    
+    # test params
+    display = True
+    seeds = 1   
+    
+    # get screen params
+    width = 800
+    height = 600
+    start_tile_height = 10
+    white = (255, 255, 255)
+    black = (0, 0, 0)
+    red = (255, 0, 0)
+    blue = (0, 0, 255)
+    grass_green = (58, 156, 53)
+    grey = (186, 182, 168)
+    
+    # function params
+    track_width = 40
+    checkpoint_margin = 5
+    checkpoint_angle_offset = 3
+    
+    # initialise pygame
+    if display:    
+        pygame.init()
+        screen = pygame.display.set_mode((width, height))
+        background_color = grass_green
+        screen.fill(background_color)
+        
+    for seed in range(seeds):
+        
+        # set the seed
+        random.seed(seed)
+        
+        # get the coords
+        f_points, checkpoints = generate_track(track_width=track_width, width=width, height=height)
+        
+        # x, y = zip(*f_points)        
+        # plt.plot(y, x)
+        # plt.show()
+        
+        # draw the screen 
+        if display:
+            draw_screen(f_points, checkpoints, screen, track_width=track_width, start_tile_height=start_tile_height, checkpoint_margin=checkpoint_margin, 
+                        checkpoint_angle_offset=checkpoint_angle_offset, track_colour=grey, start_colour=red, checkpoint_colour=blue)
+    
+    
 
