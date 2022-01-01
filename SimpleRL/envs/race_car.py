@@ -50,6 +50,7 @@ class race_car_env(environment_base):
         print('Render: {}'.format(render))        
         print('Seed: {}'.format(seed))
         print('Render Mode: {}'.format(render_mode))   
+        print('Driver Mode: {}'.format(driver_mode))  
         print('--------------------')
         
         self.render = render 
@@ -69,9 +70,8 @@ class race_car_env(environment_base):
         self.action_num = np.array([4], dtype=np.int32)
         
         self.height, self.width = 600, 800
-        self.track_width = 40
-        self.fps = 30
-        
+        self.track_width = 60 # TODO: may want to adjust this a bit
+        self.fps = 30        
         
         # Reset the environment parameters
         self.reset()
@@ -156,6 +156,10 @@ class race_car_env(environment_base):
         # initialise the car
         self.car = simulate_car(fps=self.fps, starting_position=start_point, starting_angle=start_angle)
         
+        # set the inside and outside track points
+        self.inside_track_points = inside_track_points
+        self.outside_track_points = outside_track_points
+        
         
         """
         x, y = zip(*self.track_points)
@@ -182,6 +186,8 @@ class race_car_env(environment_base):
         
         # process the action
         self.car.process_action(action=player_action)
+        
+        self.car.get_sensor_range(track_points=self.outside_track_points, screen=self.screen)
         
         # display the map
         if self.render:

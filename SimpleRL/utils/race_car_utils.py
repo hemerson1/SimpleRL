@@ -614,6 +614,11 @@ class simulate_car:
         self.velocity_dampening = 30 # 0.1
         self.max_speed = 300
         self.steering_elasticity = 5 / self.fps  
+        self.max_laser_length = 200
+        
+        self.save_point = None
+        self.check = False
+        self.sensor_point_1 = []
         
         # reset the parameters
         self.reset(starting_position=starting_position, starting_angle=starting_angle)
@@ -677,15 +682,15 @@ class simulate_car:
     """
     Update the turning angle of the car
     """            
-    def turn(self, direction):
+    def turn(self, direction):        
         
         # update the steering angle
-        new_steering_angle = self.steering_angle + direction * (math.pi / 20) * 20
-        print(new_steering_angle)
+        new_steering_angle = self.steering_angle + direction * (math.pi / 10)
         
         # restrict the steering angle to a confined range
         if new_steering_angle > self.max_steering_angle:
-            self.steering_angle = self.max_steering_angle
+            self.steering_angle = self.max_steering_angle            
+            
         elif new_steering_angle < -self.max_steering_angle:
             self.steering_angle = -self.max_steering_angle
             
@@ -698,7 +703,7 @@ class simulate_car:
     def update_position(self):
         
         delta = 1 / self.fps
-        
+                
         # adjust the car's angle using the modified steering angle
         self.angle += self.steering_angle * delta * self.speed / 100
         
@@ -760,20 +765,97 @@ class simulate_car:
             if self.speed >= 0:
                 self. speed = 0
                 
-    
+    """
+    Render the car's position, rotation and the laser's it uses for sensing the
+    environment.
+    """    
     def render_car(self, screen, car_colour):
         
-        car_surface = draw_rectangle(self.car_dimensions, car_colour, line_thickness=1, fill=True)
+        # create the car surface
+        car_surface = draw_rectangle(self.car_dimensions, car_colour, line_thickness=1, fill=True)    
         
+        # calculate the turning axel position        
+        axel_position = [self.position[0] - math.cos(self.angle) * (self.car_dimensions[0] / 4),
+                         self.position[1] - math.sin(self.angle) * (self.car_dimensions[0] / 4)]
         
-        rotated_car = pygame.transform.rotate(car_surface, -self.angle)
+        # rotate the car and place the rotated rect around the axel position
+        rotated_car = pygame.transform.rotate(car_surface, (-self.angle * 360 / (2 * math.pi)))
+        rotated_car_rect = rotated_car.get_rect(center=axel_position)
+                
+        # render the car
+        screen.blit(rotated_car, rotated_car_rect)
+
+        # draw the axel position 
+        pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
         
+        # create the laser surface
+        laser_surf = draw_rectangle([self.max_laser_length, 2], (255, 0, 0), line_thickness=1, fill=True)
         
-        # check_pos = (points[check_index][0] - math.copysign(1, n_vec_p[0]) * n_vec_p[0] * radius, points[check_index][1] - math.copysign(1, n_vec_p[1])*n_vec_p[1] * radius)  
+        # get the laser's positions
+        laser_position_1 = [self.position[0] + math.cos(self.angle) * (self.max_laser_length / 2),
+                         self.position[1] + math.sin(self.angle) * (self.max_laser_length / 2)]        
+        laser_position_2 = [self.position[0] + math.cos(self.angle - math.radians(45)) * (self.max_laser_length / 2),
+                         self.position[1] + math.sin(self.angle - math.radians(45)) * (self.max_laser_length / 2)]        
+        laser_position_3 = [self.position[0] + math.cos(self.angle + math.radians(45)) * (self.max_laser_length / 2),
+                         self.position[1] + math.sin(self.angle + math.radians(45)) * (self.max_laser_length / 2)]
         
-        screen.blit(rotated_car, self.position)
+        # rotate the lasers and get the new rectangle
+        rotated_laser_1 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi)))
+        rotated_laser_2 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi) + 45))
+        rotated_laser_3 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi) - 45))
+        rotated_laser_rect_1 = rotated_laser_1.get_rect(center=laser_position_1)
+        rotated_laser_rect_2 = rotated_laser_2.get_rect(center=laser_position_2)
+        rotated_laser_rect_3 = rotated_laser_3.get_rect(center=laser_position_3)
+        
+        # render the new shapes
+        #screen.blit(rotated_laser_1, rotated_laser_rect_1)
+        #screen.blit(rotated_laser_2, rotated_laser_rect_2)
+        #screen.blit(rotated_laser_3, rotated_laser_rect_3)
+        
+        # map overlap points        
+            
+        for i in range(len(self.sensor_x[:1000])):    
+             pygame.draw.circle(screen, (255, 0, 0), [self.sensor_x[i], self.sensor_y[i]], 3, 1)   
+             
+        for i in range(len(self.track_points)):
+            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)  
+            
+            
+        if len(self.sensor_point_1) > 0:
+            
+            print(self.sensor_point_1)
+            
+            pygame.draw.circle(screen, (0, 0, 255), self.sensor_point_1, 3, 1) 
+            self.save_point = self.sensor_point_1
+            
+            self.check = True
+            
+        if self.check:
+            pygame.draw.circle(screen, (0, 0, 255), self.save_point, 3, 1) 
         
         return screen
+    
+    def get_sensor_range(self, track_points, screen):
+        
+        granularity = 1000
+        
+        # get the range of sensor data
+        x_laser_length, y_laser_length = math.cos(self.angle) * self.max_laser_length, math.sin(self.angle) * self.max_laser_length
+        
+        self.sensor_x = np.arange(self.position[0], self.position[0] + x_laser_length, x_laser_length / granularity) 
+        self.sensor_y = np.arange(self.position[1], self.position[1] + y_laser_length, y_laser_length / granularity)         
+        
+        self.track_points = track_points        
+        track_points = np.array(track_points)      
+        
+        x_idx = np.argwhere(np.diff(np.sign(self.sensor_x[:1000] - track_points[:, 0]))).flatten()
+        # y_idx = np.argwhere(np.diff(np.sign(sensor_y[:1000] - track_points[:, 1]))).flatten()
+        
+        
+        if len(x_idx) > 0: # and len(y_idx) > 0:
+            self.sensor_point_1 = track_points[x_idx][0]
+            
+            print(self.sensor_point_1)
         
         
         
