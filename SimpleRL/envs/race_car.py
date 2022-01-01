@@ -27,6 +27,10 @@ import matplotlib.pyplot as plt
 class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
+    # TODO: fix the gap in the track edge
+    # TODO: add inner layer to detection
+    # TODO: add multiple 'feelers' for detection
+    # TODO: add checkpoint detection
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
         
@@ -306,8 +310,8 @@ if __name__ == "__main__":
                 state = next_state
                 
             counter += 1            
-            if counter >= 1000:
-                done = True
-                env._close_display()
+            #if counter >= 1000:
+            #    done = True
+            #    env._close_display()
         
     
