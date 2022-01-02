@@ -191,7 +191,11 @@ class race_car_env(environment_base):
         # process the action
         self.car.process_action(action=player_action)
         
-        self.car.get_sensor_range(track_points=self.outside_track_points, screen=self.screen)
+        self.car.get_sensor_range(screen=self.screen, 
+                                  outside_track_points=self.outside_track_points, 
+                                  inside_track_points=self.inside_track_points,
+                                  track_points=self.track_points
+                                  )
         
         # display the map
         if self.render:
