@@ -7,7 +7,7 @@ Created on Wed Dec 29 16:15:32 2021
 """
 
 """ 
-race_car_env - a race car track where the agent is timed for 1 lap
+race_car_env - a race car track where the agent is timed for 1 lap.
 
 """
 
@@ -74,7 +74,7 @@ class race_car_env(environment_base):
         self.action_num = np.array([4], dtype=np.int32)
         
         self.height, self.width = 600, 800
-        self.track_width = 60 # TODO: may want to adjust this a bit
+        self.track_width = 60 
         self.fps = 30        
         
         # Reset the environment parameters
@@ -129,20 +129,21 @@ class race_car_env(environment_base):
         radius = self.track_width // 2
         final_angle = None
         
-        final_index = len(self.track_points) - 1
+        final_index = len(self.track_points) - 1 
         for idx, point in enumerate(self.track_points):
             
             # get the next and current point
             current_point = point
-            next_point = self.track_points[(idx + 1) % final_index]
+            next_point = self.track_points[(idx + 30) % final_index]
+            prev_point = self.track_points[(idx - 30) % final_index]
             
             # calculate an angle between the two points (in radians)
-            angle = math.atan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
-            
+            angle = math.atan2(next_point[1] - prev_point[1], next_point[0] - prev_point[0])
+                        
             # add the outside track coordinates
             outside_track_x = current_point[0] + radius * math.sin(angle)
             outside_track_y = current_point[1] - radius * math.cos(angle)   
-            outside_track_points.append((outside_track_x, outside_track_y))
+            outside_track_points.append((outside_track_x, outside_track_y))  
             
             # add the inside track coordinates
             inside_track_x = current_point[0] - radius * math.sin(angle)
@@ -176,8 +177,7 @@ class race_car_env(environment_base):
         plt.scatter(start_point[1], start_point[0])
         
         plt.show()
-        """
-        
+        """       
         
         # TODO: process the player state and return it
         # How will the players state be detected? 

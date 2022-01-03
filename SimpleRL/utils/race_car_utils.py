@@ -10,7 +10,7 @@ import numpy as np
 import math
 import pygame 
 import random 
-
+import scipy
 from scipy import interpolate
 
 # TESTING
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 # Used to compute the convex hull
 # https://startupnextdoor.com/computing-convex-hull-in-python/
 
-# Used for BSpline interpolation and evaluation:
+# Used for B-Spline interpolation and evaluation:
 # https://github.com/XuejiaoYuan/BSpline
 
 # Used for car dynamics:
@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 
 # TODO: keep an eye out for bug which gives the track a spotted appearance
 # TODO: comment all the bspline curve functions and change the variables to be more readable
+# TODO: try to remove the scipy dependency
 
 
 # Creating the Track ----------------------------------------------------------
@@ -44,12 +45,12 @@ def generate_track(track_width, width, height):
     min_points = 20
     max_points = 30
     margin = 50
-    min_distance = 20 # 100 
+    min_distance = 20 
     
     # parameters for shape_track
     difficulty = 0.1
     max_displacement = 80
-    max_angle = 90
+    max_angle = 70
     distance_between_points = 80
     
     # parameters for smooth_track
@@ -63,11 +64,12 @@ def generate_track(track_width, width, height):
                            min_distance=min_distance, width=width, height=height)
     
     # calculate the convex hull of the random points
-    hull_points = convex_hull(points)    
+    hull = scipy.spatial.ConvexHull(points) # convex_hull(points)    
+    hull_points = np.array([points[hull.vertices[i]] for i in range(len(hull.vertices))])
     
     # get the points of the track
     track_points = shape_track(hull_points, difficulty=difficulty, max_displacement=max_displacement, margin=margin, track_width=track_width,
-                               max_angle=max_angle, distance_between_points=distance_between_points, width=width, height=height)
+                             max_angle=max_angle, distance_between_points=distance_between_points, width=width, height=height)
     
     # smooth the track points
     f_points = smooth_track(track_points, spline_points=spline_points)
@@ -84,10 +86,10 @@ Generate a random set of points subject to the outlined constraints
 def random_points(min_p, max_p, margin, min_distance, width, height):
     
     # get number of points
-    pointCount = random.randrange(min_p, max_p + 1, 1)
+    point_count = random.randrange(min_p, max_p + 1, 1)
     
     points = []
-    for i in range(pointCount):
+    for i in range(point_count):
         
         # get x and y of points
         x = random.randrange(margin, width - margin + 1, 1)
@@ -189,21 +191,11 @@ def shape_track(track_points, difficulty, max_displacement, margin, track_width,
         # set second index to current track point + mean of current and next track point + magnitude of dispalcement
         track_set[i * 2 + 1][0] = int((track_points[i][0] + track_points[(i + 1) % len(track_points)][0]) / 2 + disp[0])
         track_set[i * 2 + 1][1] = int((track_points[i][1] + track_points[(i + 1) % len(track_points)][1]) / 2 + disp[1])
-        
-    # track_set = track_set[:-1]
-        
-    x, y = zip(*track_set)        
-    plt.plot(y, x, color='g')
-    plt.show()  
     
     # ensure angles are suitable and points are sufficiently far apart
     for i in range(3):
         track_set = fix_angles(track_set, max_angle=max_angle)
         track_set = push_points_apart(track_set, distance=distance_between_points)   
-        
-    x, y = zip(*track_set)        
-    plt.plot(y, x, color='r')
-    plt.show()  
         
     # ensure all the points are within the screen limits
     final_set = []
@@ -223,14 +215,6 @@ def shape_track(track_points, difficulty, max_displacement, margin, track_width,
             
         final_set.append(point)
      
-    # make it a complete loop
-    #final_set = final_set[:-1]
-    #final_set.append(final_set[0])
-    
-    x, y = zip(*final_set)        
-    plt.plot(y, x, color='b')
-    plt.show()          
-        
     return final_set
 
 """
@@ -349,7 +333,6 @@ using a B-spline function.
 """
 def smooth_track(track_points, spline_points): 
     
-
     x = np.array([p[0] for p in track_points])
     y = np.array([p[1] for p in track_points])
     
@@ -357,28 +340,28 @@ def smooth_track(track_points, spline_points):
     x = np.r_[x, x[0]]
     y = np.r_[y, y[0]]
     
+    x_1, y_1 = x, y
+    plt.plot(y_1, x_1, color='b')
+    plt.show()    
+    
     # fit splines to x=f(u) and y=g(u), treating both as periodic. also note that s=0
     # is needed in order to force the spline fit to pass through all the input points.
-    tck, _ = interpolate.splprep([x, y], s=0, per=True)
+    tck, _ = interpolate.splprep([x, y], s=0, per=True)    
     
-    print(tck[0])
-    print(tck[1])
-    print(tck[2])
-    
+    x_2, y_2 = tck[1][0], tck[1][1]
+    plt.plot(y_2, x_2, color='g')
+    plt.show()    
 
     # evaluate the spline fits for # points evenly spaced distance values
     xi, yi = interpolate.splev(np.linspace(0, 1, spline_points), tck)
-    return [(int(xi[i]), int(yi[i])) for i in range(len(xi))]
-
+    return [(int(xi[i]), int(yi[i])) for i in range(len(xi))]    
     
     # TODO: this B-spline function is not working as intended 
     # -> the last point does not connect continuously
-    
-    
+        
     # get x and y in the appropriate format
     x, y = zip(*track_points)
-    x, y = list(x), list(y)
-    
+    x, y = list(x), list(y)    
     x.append(x[0])
     y.append(y[0])
     
@@ -387,15 +370,23 @@ def smooth_track(track_points, spline_points):
     # combine the lists
     combined_list = [x, y]
     
+    x_1, y_1 = x, y
+    plt.plot(y_1, x_1, color='b')
+    plt.show()      
+    
     p_centripetal = centripetal(len(x), combined_list)
     knot = knot_vector(p_centripetal, k, len(x))
     P_control = curve_approximation(D=combined_list, N=len(x), H=H, k=k, param=p_centripetal, knot=knot)
- 
+    
+    x_2, y_2 = P_control[0], P_control[1]        
+    plt.plot(y_2, x_2, color='g')
+    plt.show()      
+    
     p_piece = np.linspace(0, 1, spline_points)    
     p_centripetal_new = centripetal(H, P_control)
     knot_new = knot_vector(p_centripetal_new, k, H)
     P_piece = curve(P_control, H, k, p_piece, knot_new)
-        
+
     return [(int(P_piece[0][idx]), int(P_piece[1][idx])) for idx in range(len(P_piece[0]))]    
 
 """
@@ -414,6 +405,7 @@ def curve(control_points, n_points, degree, param, knot):
     bspline_data = []
     for i in range(len(control_points)):
         bspline_data.append(np.dot(Nik, control_points[i]).tolist())
+        
     return bspline_data
 
 """
@@ -458,19 +450,28 @@ def centripetal(n, P):
     :param P: data points
     :return: parameters
     '''
-    a = 0.5
+    a = 0.5 
     parameters = np.zeros((1, n))
+    
+    # cycle throught the points
     for i in range(1, n):
         dis = 0
-        
+
+        # cycle through axes        
         for j in range(len(P)):
-            dis = dis + (P[j][i]-P[j][i-1]) ** 2
             
+            # calculate the square difference between each consecutive value
+            dis = dis + (P[j][i] - P[j][i - 1]) ** 2
+            
+        # square root the distance
         dis = np.sqrt(dis)
-        parameters[0][i] = parameters[0][i-1] + np.power(dis, a)
         
+        # update the parameter value
+        parameters[0][i] = parameters[0][i - 1] + np.power(dis, a)
+    
+    # divide each value my the max to normalise
     for i in range(1, n):
-        parameters[0][i] = parameters[0][i] / parameters[0][n-1]
+        parameters[0][i] = parameters[0][i] / parameters[0][n - 1]
         
     return parameters[0]
 
@@ -486,7 +487,8 @@ def knot_vector(param, k, N):
     :return: knot vector
     '''
     m = N + k
-    knot = np.zeros((1, m+1))
+    knot = np.zeros((1, m + 1))
+    
     for i in range(k + 1):
         knot[0][i] = 0
         
@@ -521,31 +523,50 @@ def curve_approximation(D, N, H, k, param, knot):
     :param knot: knot vector
     :return: control points (H x 2)
     '''
+    
     P = []
     if H >= N or H <= k:
         print('Parameter H is out of range')
         return P
-
+    
+    # TODO: this function needs to adjust the position of the first and final 
+    # point to make it continuous
+    
     for idx in range(len(D)):
+        
         P_ = np.zeros((1, H))
+        
+        # set the final and initial points
         P_[0][0] = D[idx][0]
-        P_[0][H-1] = D[idx][N-1]
+        P_[0][H - 1] = D[idx][N - 1]
+        
+        # initialise the arrays
         Qk = np.zeros((N - 2, 1))
         Nik = np.zeros((N, H))
         
+        # calculate base function for each index
         for i in range(N):
             for j in range(H):
                 Nik[i][j] = base_function(j, k + 1, param[i], knot)
-
-        for j in range(1, N - 1):
+                        
+        for j in range(1, N - 1): 
             Qk[j - 1] = D[idx][j] - Nik[j][0] * P_[0][0] - Nik[j][H - 1] * P_[0][H - 1]
-
+        
+        # cut the input array
         N_part = Nik[1: N - 1, 1: H - 1]
+        
+        # perfrom dot product
         Q = np.dot(N_part.transpose(), Qk)
+        
+        # get squared value
         M = np.dot(np.transpose(N_part), N_part)
-        P_[0][1:H - 1] = np.dot(np.linalg.inv(M), Q).transpose()
+        
+        # get the points which solve the equation
+        P_[0][1 : H - 1] = np.dot(np.linalg.inv(M), Q).transpose()
+        
+        # add the values to the array
         P.append(P_.tolist()[0])
-
+        
     return P
 
 """
@@ -652,7 +673,7 @@ class simulate_car:
         
         # intialise the car parameters
         self.car_dimensions = [20, 8]
-        self.max_steering_angle = math.pi / 3
+        self.max_steering_angle = math.pi / 2
         self.acceleration_rate = 10
         self.velocity_dampening = 30 # 0.1
         self.max_speed = 300
@@ -872,10 +893,6 @@ class simulate_car:
         for i in range(len(self.track_points)):
             pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)       
             
-        # draw the track outline
-        for i in range(len(self.track_points_test)):
-            pygame.draw.circle(screen, (0, 0, 255), list(self.track_points_test[i]), 3, 1)    
-            
         # add the collision point 
         if self.sensor_point_1 is not None:
             pygame.draw.circle(screen, (0, 0, 255), self.sensor_point_1, 3, 1)
@@ -884,7 +901,7 @@ class simulate_car:
     
     def get_sensor_range(self,  screen, outside_track_points, inside_track_points, track_points):
         
-        self.track_points_test = track_points
+        # TODO: the finish line is giving rise to confusing behaviour
         
         # combine inside and outside track points
         track_points = outside_track_points + inside_track_points
@@ -933,17 +950,18 @@ class simulate_car:
         correct_dist = [(self.position[0] - x) ** 2 for x in correct_dir]   
         
         # get the correct x index
-        chosen_x = correct_dir[correct_dist.index(min(correct_dist))]
-        
-        # update the sensor point value
         self.sensor_point_1 = None
-        if len(x_idx) > 0: 
-            chosen_index = x_idx[x_vals.index(chosen_x)]
+        if len(correct_dist) > 0:
+            chosen_x = correct_dir[correct_dist.index(min(correct_dist))]
             
-            # calculate the distance of the point
-            distance = math.sqrt((self.position[0] - chosen_x) ** 2 + (self.position[1] - common_y[chosen_index]) ** 2)            
-            if distance < self.max_laser_length:
-                self.sensor_point_1 = [chosen_x, common_y[chosen_index]]        
+            # update the sensor point value
+            if len(x_idx) > 0: 
+                chosen_index = x_idx[x_vals.index(chosen_x)]
+                
+                # calculate the distance of the point
+                distance = math.sqrt((self.position[0] - chosen_x) ** 2 + (self.position[1] - common_y[chosen_index]) ** 2)            
+                if distance < self.max_laser_length:
+                    self.sensor_point_1 = [chosen_x, common_y[chosen_index]]        
                             
         
 if __name__ == '__main__':
