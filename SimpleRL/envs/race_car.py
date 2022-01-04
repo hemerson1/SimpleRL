@@ -27,7 +27,8 @@ import matplotlib.pyplot as plt
 class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: add checkpoint detection
+    # TODO: tidy up the checkpointing function
+    # TODO: add the state, reward and info
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
         
@@ -154,12 +155,39 @@ class race_car_env(environment_base):
         start_point = self.checkpoints[0]
         start_angle = final_angle
         
+        checkpoint_edges = []        
+        for idx, checkpoint in enumerate(self.checkpoints):
+            
+            # get the next and current point
+            current_point = checkpoint
+            next_point = self.checkpoints[(idx + 1) % len(self.checkpoints)]
+            prev_point = self.checkpoints[(idx - 1) % len(self.checkpoints)]
+            
+            # calculate an angle between the two points (in radians)
+            angle = math.atan2(next_point[1] - prev_point[1], next_point[0] - prev_point[0])
+                        
+            # add the outside track coordinates
+            out_checkpoint_x = current_point[0] + radius * math.sin(angle)
+            out_checkpoint_y = current_point[1] - radius * math.cos(angle) 
+            
+            # add the inside track coordinates
+            in_checkpoint_x = current_point[0] - radius * math.sin(angle)
+            in_checkpoint_y = current_point[1] + radius * math.cos(angle) 
+            
+            checkpoint_edges.append([[out_checkpoint_x, out_checkpoint_y], [in_checkpoint_x, in_checkpoint_y]]) 
+        
         # initialise the car
         self.car = simulate_car(fps=self.fps, starting_position=start_point, starting_angle=start_angle)
         
         # set the inside and outside track points
         self.inside_track_points = inside_track_points
         self.outside_track_points = outside_track_points
+        
+        # update the checkpoint list
+        starting_checkpoint = checkpoint_edges.pop(0) 
+        checkpoint_edges.append(starting_checkpoint)   
+        
+        self.checkpoint_edges = checkpoint_edges
         
         # TODO: process the player state and return it
         # How will the players state be detected?         
@@ -181,6 +209,23 @@ class race_car_env(environment_base):
         crashed_side = math.dist(sensor_points[0], self.car.position) < (self.car.dimensions[1] / 2)
         if crashed_side or crashed_front:
             done = True    
+            
+        # check for checkpoint passings
+        current_position = self.car.position
+        next_checkpoint = self.checkpoint_edges[0]
+        
+        outside_edge = math.dist(current_position, next_checkpoint[0])
+        inside_edge = math.dist(current_position, next_checkpoint[1])
+        combined_dist = outside_edge + inside_edge
+        
+        if combined_dist < (1.1 * self.track_width):
+            
+            self.checkpoint_edges.pop(0)
+            print('{} checkpoints remaining'.format(len(self.checkpoint_edges)))
+            
+            if len(self.checkpoint_edges) == 0:
+                done = True
+                print('Lap completed')
         
         # display the map
         if self.render:
@@ -227,7 +272,14 @@ class race_car_env(environment_base):
         self.screen = draw_map(f_points=self.track_points, checkpoints=self.checkpoints, screen=self.screen,
                                track_width=self.track_width, checkpoint_margin=self.checkpoint_margin, 
                                checkpoint_angle_offset=self.checkpoint_angle_offset, track_colour=self.grey, 
-                               checkpoint_colour=self.blue, start_colour=self.red, background_colour=self.grass_green)           
+                               checkpoint_colour=self.blue, start_colour=self.red, background_colour=self.grass_green)  
+
+
+        for checkpoints in self.checkpoint_edges:
+            
+            pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[0], 3, 1)
+            pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[1], 3, 1)
+            
         
         # render the car
         self.screen = self.car.render_car(screen=self.screen, car_colour=self.yellow)        
@@ -256,7 +308,7 @@ class race_car_env(environment_base):
         
 if __name__ == "__main__": 
         
-    seed_range = 1
+    seed_range = 3
     driver_mode = "human"
     render = True
     

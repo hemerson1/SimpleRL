@@ -833,9 +833,6 @@ class simulate_car:
         # draw the track outline
         for i in range(len(self.track_points)):
             pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)    
-            
-            
-        pygame.draw.circle(screen, (0, 0, 255), [300, 100], 3, 1)
         
         return screen
     
