@@ -27,9 +27,6 @@ import matplotlib.pyplot as plt
 class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: fix the gap in the track edge
-    # TODO: add inner layer to detection
-    # TODO: add multiple 'feelers' for detection
     # TODO: add checkpoint detection
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
@@ -121,8 +118,7 @@ class race_car_env(environment_base):
         # generate the new track points and checkpoints
         self.track_points, self.checkpoints = generate_track(height=self.height, width=self.width, track_width=self.track_width)        
         
-        # Cycle through the points and get the location of the edges of the track
-        # create this into a surface and calculate the point at which feelers overlap the edge of the surface. 
+        # TODO: comment this and wrap below into a function 
         
         inside_track_points = []
         outside_track_points = []
@@ -165,49 +161,40 @@ class race_car_env(environment_base):
         self.inside_track_points = inside_track_points
         self.outside_track_points = outside_track_points
         
-        
-        """
-        x, y = zip(*self.track_points)
-        x_i, y_i = zip(*inside_track_points)
-        x_o, y_o = zip(*outside_track_points)
-        
-        plt.plot(y, x)
-        plt.plot(y_i, x_i)
-        plt.plot(y_o, x_o)
-        plt.scatter(start_point[1], start_point[0])
-        
-        plt.show()
-        """       
-        
         # TODO: process the player state and return it
-        # How will the players state be detected? 
-        # Probably should be feelers for distance on front half of car
-        
-        # Could try and get perimeter of track and then calculate point of intersection relative to player position?
-        
+        # How will the players state be detected?         
         
     def step(self, player_action=None):
         
         # process the action
         self.car.process_action(action=player_action)
         
-        self.car.get_sensor_range(screen=self.screen, 
-                                  outside_track_points=self.outside_track_points, 
-                                  inside_track_points=self.inside_track_points,
-                                  track_points=self.track_points
-                                  )
+        sensor_points = self.car.get_sensor_ranges(screen=self.screen, 
+                                                  outside_track_points=self.outside_track_points, 
+                                                  inside_track_points=self.inside_track_points,
+                                                  track_points=self.track_points
+                                                  )
+        
+        # check for collisions with the edge of track
+        done = False
+        crashed_front = math.dist(sensor_points[2], self.car.position) < (self.car.dimensions[0] / 2)
+        crashed_side = math.dist(sensor_points[0], self.car.position) < (self.car.dimensions[1] / 2)
+        if crashed_side or crashed_front:
+            done = True    
         
         # display the map
         if self.render:
             self._display() 
+            
+            # shut the display
+            if done: self._close_display()
         
         # if there is an AI driver
         if self.driver_mode == "default":            
             # state, reward, done, info
             return self.grid_map.flatten(), reward, done, info
         
-        elif self.driver_mode == "human":            
-            done = False
+        elif self.driver_mode == "human":   
             return done
 
             

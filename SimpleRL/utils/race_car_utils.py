@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 # Used for car dynamics:
 # https://github.com/mdeyo/simple-pycar
 
-# TODO: keep an eye out for bug which gives the track a spotted appearance
 # TODO: comment all the bspline curve functions and change the variables to be more readable
 # TODO: try to remove the scipy dependency
 
@@ -96,7 +95,7 @@ def random_points(min_p, max_p, margin, min_distance, width, height):
         y = random.randrange(margin, height -margin + 1, 1)
         
         # remove any points which are less than the minimum distance
-        distances = list(filter(lambda x: x < min_distance, [math.sqrt((p[0]-x)**2 + (p[1]-y)**2) for p in points]))
+        distances = list(filter(lambda x: x < min_distance, [math.dist(p, [x, y]) for p in points]))
         
         # append x and y 
         if len(distances) == 0:
@@ -300,7 +299,7 @@ def push_points_apart(points, distance):
         for j in range(i+1, len(points)):
             
             # get distance between 2 points 
-            p_distance =  math.sqrt((points[i][0] - points[j][0]) ** 2 + (points[i][1] - points[j][1]) ** 2)
+            p_distance =  math.dist(points[i], points[j])
             
             # if beyond the max distance
             if p_distance < distance:
@@ -340,17 +339,9 @@ def smooth_track(track_points, spline_points):
     x = np.r_[x, x[0]]
     y = np.r_[y, y[0]]
     
-    x_1, y_1 = x, y
-    plt.plot(y_1, x_1, color='b')
-    plt.show()    
-    
     # fit splines to x=f(u) and y=g(u), treating both as periodic. also note that s=0
     # is needed in order to force the spline fit to pass through all the input points.
-    tck, _ = interpolate.splprep([x, y], s=0, per=True)    
-    
-    x_2, y_2 = tck[1][0], tck[1][1]
-    plt.plot(y_2, x_2, color='g')
-    plt.show()    
+    tck, _ = interpolate.splprep([x, y], s=0, per=True)   
 
     # evaluate the spline fits for # points evenly spaced distance values
     xi, yi = interpolate.splev(np.linspace(0, 1, spline_points), tck)
@@ -370,17 +361,9 @@ def smooth_track(track_points, spline_points):
     # combine the lists
     combined_list = [x, y]
     
-    x_1, y_1 = x, y
-    plt.plot(y_1, x_1, color='b')
-    plt.show()      
-    
     p_centripetal = centripetal(len(x), combined_list)
     knot = knot_vector(p_centripetal, k, len(x))
     P_control = curve_approximation(D=combined_list, N=len(x), H=H, k=k, param=p_centripetal, knot=knot)
-    
-    x_2, y_2 = P_control[0], P_control[1]        
-    plt.plot(y_2, x_2, color='g')
-    plt.show()      
     
     p_piece = np.linspace(0, 1, spline_points)    
     p_centripetal_new = centripetal(H, P_control)
@@ -529,9 +512,6 @@ def curve_approximation(D, N, H, k, param, knot):
         print('Parameter H is out of range')
         return P
     
-    # TODO: this function needs to adjust the position of the first and final 
-    # point to make it continuous
-    
     for idx in range(len(D)):
         
         P_ = np.zeros((1, H))
@@ -586,8 +566,6 @@ def get_checkpoints(track_points, n_checkpoints):
 
 
 # Drawing the track ---------------------------------------------------------
-
-# TODO: modify the drawing functions to fit more seemlessly with the environment
 
 """
 Function for drawing the race track map using a set of track points and some 
@@ -672,15 +650,16 @@ class simulate_car:
         self.fps = 30
         
         # intialise the car parameters
-        self.car_dimensions = [20, 8]
+        self.dimensions = [20, 8]
         self.max_steering_angle = math.pi / 2
         self.acceleration_rate = 10
-        self.velocity_dampening = 30 # 0.1
+        self.velocity_dampening = 30
         self.max_speed = 300
         self.steering_elasticity = 5 / self.fps  
         self.max_laser_length = 200
         
-        self.sensor_point_1 = []
+        self.sensor_points = []
+        self.sensor_angles = [-90, -45, 0, +45, +90] 
         
         # reset the parameters
         self.reset(starting_position=starting_position, starting_angle=starting_angle)
@@ -835,86 +814,92 @@ class simulate_car:
     def render_car(self, screen, car_colour):
         
         # create the car surface
-        car_surface = draw_rectangle(self.car_dimensions, car_colour, line_thickness=1, fill=True)    
+        car_surface = draw_rectangle(self.dimensions, car_colour, line_thickness=1, fill=True)    
         
-        # calculate the turning axel position        
-        axel_position = [self.position[0] - math.cos(self.angle) * (self.car_dimensions[0] / 4),
-                         self.position[1] - math.sin(self.angle) * (self.car_dimensions[0] / 4)]
-        
-        # rotate the car and place the rotated rect around the axel position
+        # rotate the car and place the rotated rect at position
         rotated_car = pygame.transform.rotate(car_surface, (-self.angle * 360 / (2 * math.pi)))
-        rotated_car_rect = rotated_car.get_rect(center=axel_position)
+        rotated_car_rect = rotated_car.get_rect(center=self.position)
                 
         # render the car
         screen.blit(rotated_car, rotated_car_rect)
 
-        # draw the axel position 
+        # draw the centre position 
         pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
         
-        # create the laser surface
-        laser_surf = draw_rectangle([self.max_laser_length, 2], (255, 0, 0), line_thickness=1, fill=True)
-        
-        # get the laser's positions
-        laser_position_1 = [self.position[0] + math.cos(self.angle) * (self.max_laser_length / 2),
-                         self.position[1] + math.sin(self.angle) * (self.max_laser_length / 2)]        
-        laser_position_2 = [self.position[0] + math.cos(self.angle - math.radians(45)) * (self.max_laser_length / 2),
-                         self.position[1] + math.sin(self.angle - math.radians(45)) * (self.max_laser_length / 2)]        
-        laser_position_3 = [self.position[0] + math.cos(self.angle + math.radians(45)) * (self.max_laser_length / 2),
-                         self.position[1] + math.sin(self.angle + math.radians(45)) * (self.max_laser_length / 2)]
-        
-        # rotate the lasers and get the new rectangle
-        rotated_laser_1 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi)))
-        rotated_laser_2 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi) + 45))
-        rotated_laser_3 = pygame.transform.rotate(laser_surf, (-self.angle * 360 / (2 * math.pi) - 45))
-        rotated_laser_rect_1 = rotated_laser_1.get_rect(center=laser_position_1)
-        rotated_laser_rect_2 = rotated_laser_2.get_rect(center=laser_position_2)
-        rotated_laser_rect_3 = rotated_laser_3.get_rect(center=laser_position_3)
-        
-        # render the new shapes
-        #screen.blit(rotated_laser_1, rotated_laser_rect_1)
-        #screen.blit(rotated_laser_2, rotated_laser_rect_2)
-        #screen.blit(rotated_laser_3, rotated_laser_rect_3)
-        
-        # map overlap points                
-        for i in range(len(self.common_y)):  
-            
-            # check only forward points are mapped
-            if self.angle < (math.pi / 2) or self.angle > (3 * math.pi / 2): condition = self.line_x[i] > self.position[0]
-            else: condition = self.line_x[i] <= self.position[0]  
-                
-            if condition:
-                
-                # check only points within are certain distance are mapped
-                distance = math.sqrt((self.position[0] - self.line_x[i]) ** 2 + (self.position[1] - self.common_y[i]) ** 2)                  
-                if distance < self.max_laser_length:
-                    pygame.draw.circle(screen, (255, 0, 0), [self.line_x[i], self.common_y[i]], 3, 1)   
+        # draw on the individual laser
+        for idx, angle in enumerate(self.sensor_angles):
+            screen = self.draw_laser(screen=screen, sensor_angle=angle, sensor_point=self.sensor_points[idx])                    
              
         # draw the track outline
         for i in range(len(self.track_points)):
-            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)       
+            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)    
             
-        # add the collision point 
-        if self.sensor_point_1 is not None:
-            pygame.draw.circle(screen, (0, 0, 255), self.sensor_point_1, 3, 1)
+            
+        pygame.draw.circle(screen, (0, 0, 255), [300, 100], 3, 1)
         
         return screen
     
-    def get_sensor_range(self,  screen, outside_track_points, inside_track_points, track_points):
+    
+    def draw_laser(self, screen, sensor_angle, sensor_point):
         
-        # TODO: the finish line is giving rise to confusing behaviour
+        # calculate the distance to a collision
+        laser_length = math.dist(sensor_point, self.position)
+                
+        # create the laser surface
+        selected_laser_length = min(laser_length, self.max_laser_length)
+        laser_surf = draw_rectangle([selected_laser_length, 2], (255, 0, 0), line_thickness=1, fill=True)
+        
+        input_angle = self.angle + math.radians(sensor_angle)
+        laser_position = [self.position[0] + math.cos(input_angle) * (selected_laser_length / 2),
+                         self.position[1] + math.sin(input_angle) * (selected_laser_length/ 2)]  
+        
+        # rotate the laser shape
+        rotated_laser = pygame.transform.rotate(laser_surf, (-input_angle * 360 / (2 * math.pi)))
+        rotated_laser_rect = rotated_laser.get_rect(center=laser_position)
+        
+        # draw on the shape
+        screen.blit(rotated_laser, rotated_laser_rect)
+        
+        return screen
+    
+    def get_sensor_ranges(self,  screen, outside_track_points, inside_track_points, track_points):
         
         # combine inside and outside track points
         track_points = outside_track_points + inside_track_points
+        transition_idx = len(outside_track_points) - 1  
         self.track_points = track_points
         
+        sensor_angles = self.sensor_angles
+        x_lines, track_x, common_y = self.get_sensor_lines(track_points=track_points, sensor_angles=sensor_angles)  
+        
+        sensor_points = []        
+        for idx, angle in enumerate(sensor_angles):
+            sensor_point = self.get_single_sensor_range(track_points=track_points, transition_idx=transition_idx, x_lines=x_lines,
+                                                  track_x=track_x, common_y=common_y, sensor_angle=angle, idx=idx)
+            sensor_points.append(sensor_point)
+            
+        self.sensor_points = sensor_points       
+
+        return sensor_points             
+                    
+    def get_sensor_lines(self, track_points, sensor_angles):
+        
         # get the range of sensor data
-        x_laser_length, y_laser_length = math.cos(self.angle) * self.max_laser_length, math.sin(self.angle) * self.max_laser_length
+        x_laser_lengths, y_laser_lengths = [], []          
+        for angle in sensor_angles:            
+            input_angle = (self.angle + math.radians(angle)) % (2 * math.pi) 
+            x_laser_length, y_laser_length = math.cos(input_angle) * self.max_laser_length, math.sin(input_angle) * self.max_laser_length
+            
+            # append the lengths
+            x_laser_lengths.append(x_laser_length)
+            y_laser_lengths.append(y_laser_length)            
         
         # get the x and y track points
         x, y = zip(*track_points)
                         
         # extract the track values which fall in range
-        track_x, line_x, common_y = [], [], []
+        track_x, common_y = [], []
+        x_lines = []
         
         for i, y_val in enumerate(y):   
                 
@@ -922,46 +907,75 @@ class simulate_car:
             common_y.append(y_val)
             
             # get the track x_value
-            track_x.append(x[i])                
+            track_x.append(x[i])         
             
-            # get the line x values
-            x_val = (y_val - self.position[1]) * (x_laser_length / y_laser_length) + self.position[0]
-            line_x.append(x_val)
+            # get the line x values 
+            intercept_x = []
+            for idx, x_laser_length in enumerate(x_laser_lengths):
+                              
+                # calculate the gradient
+                gradient = (x_laser_length / y_laser_lengths[idx])                
+                x_val = (y_val - self.position[1]) * gradient + self.position[0]    
+                
+                intercept_x.append(x_val)
+              
+            # update the total list
+            x_lines.append(intercept_x)   
         
         # set the some variables for visualisation
-        self.line_x = line_x
+        self.x_lines = x_lines
         self.common_y = common_y
         
         # convert to arrays
-        line_x = np.array(line_x)
+        x_lines = np.array(x_lines)
         track_x = np.array(track_x)
         
-        # get the intercept indexes and their values
-        x_idx = np.argwhere(np.diff(np.sign(line_x - track_x))).flatten()         
-        x_vals = [track_x[idx] for idx in x_idx]
-                
-        # select the values which correspond to forward movement
-        if self.angle < (math.pi / 2) or self.angle > (3 * math.pi / 2): 
-            correct_dir = [x for x in x_vals if x > self.position[0]]
-        
-        else: 
-            correct_dir = [x for x in x_vals if x < self.position[0]]     
+        return x_lines, track_x, common_y
+                    
+                    
+    def get_single_sensor_range(self, track_points, transition_idx, x_lines, track_x, common_y, sensor_angle, idx=0):        
             
-        correct_dist = [(self.position[0] - x) ** 2 for x in correct_dir]   
+        input_angle = (self.angle + math.radians(sensor_angle)) %  (2 * math.pi)
+        x_line = x_lines[:, idx]
+        
+        # get the intercept indexes and their values
+        x_idx = np.argwhere(np.diff(np.sign(x_line - track_x))).flatten() 
+        
+        x_vals = [(track_x[idx] - self.position[0]) for idx in x_idx if idx != transition_idx]
+        y_vals = [(common_y[idx] - self.position[1]) for idx in x_idx if idx != transition_idx]
+        
+        # ensure the collisions are only measured forward with a small factor for error
+        if input_angle > 0 and input_angle <= math.pi / 2:            
+            correct_dir = [x for idx, x in enumerate(x_vals) if (x + 3 >= 0 and y_vals[idx] + 3  >= 0)]            
+        elif input_angle > math.pi / 2 and input_angle <= math.pi:
+            correct_dir = [x for idx, x in enumerate(x_vals) if x - 3 <= 0 and y_vals[idx] + 3 >= 0]            
+        elif input_angle > math.pi and input_angle <= 3/2 * math.pi:
+            correct_dir = [x for idx, x in enumerate(x_vals) if x - 3 <= 0 and y_vals[idx] - 3 <= 0]        
+        else:
+            correct_dir = [x for idx, x in enumerate(x_vals)if x + 3 >= 0 and y_vals[idx] - 3 <= 0]   
+            
+        # get the smallest forward collision     
+        correct_dist = [math.sqrt(x ** 2 + y_vals[x_vals.index(x)] ** 2)  for x in correct_dir] 
         
         # get the correct x index
-        self.sensor_point_1 = None
+        sensor_point = [100_000, 100_000]
         if len(correct_dist) > 0:
-            chosen_x = correct_dir[correct_dist.index(min(correct_dist))]
             
-            # update the sensor point value
-            if len(x_idx) > 0: 
-                chosen_index = x_idx[x_vals.index(chosen_x)]
-                
-                # calculate the distance of the point
-                distance = math.sqrt((self.position[0] - chosen_x) ** 2 + (self.position[1] - common_y[chosen_index]) ** 2)            
-                if distance < self.max_laser_length:
-                    self.sensor_point_1 = [chosen_x, common_y[chosen_index]]        
+            # get the correct index
+            min_dist = min(correct_dist)
+            min_dist_index = correct_dist.index(min_dist)
+            correct_x = correct_dir[min_dist_index]
+            correct_x_index = x_vals.index(correct_x)         
+            
+            # get the x position
+            chosen_x = x_vals[correct_x_index]
+             
+            # set the point if it is less than the max distance
+            if min_dist <= self.max_laser_length:                
+                sensor_point = [chosen_x + self.position[0], y_vals[correct_x_index] + self.position[1]]
+        
+        return sensor_point
+        
                             
         
 if __name__ == '__main__':
