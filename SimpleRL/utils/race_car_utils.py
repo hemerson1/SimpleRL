@@ -13,8 +13,8 @@ import random
 import scipy
 from scipy import interpolate
 
-# TESTING
-import matplotlib.pyplot as plt
+# Testing 
+import time
 
 # Try using this to generate a race track:
 # https://github.com/juangallostra/procedural-tracks
@@ -30,7 +30,6 @@ import matplotlib.pyplot as plt
 
 # TODO: comment all the bspline curve functions and change the variables to be more readable
 # TODO: try to remove the scipy dependency
-
 
 # Creating the Track ----------------------------------------------------------
 
@@ -579,7 +578,7 @@ def draw_map(f_points, checkpoints, screen, track_width, checkpoint_margin,
     
     # draw the road
     draw_track(screen, track_colour, f_points, track_width=track_width)
-
+    
     # draw the checkpoints
     for checkpoint_idx, checkpoint in enumerate(checkpoints):
         draw_checkpoint(screen, f_points, checkpoint, checkpoint_idx, checkpoint_margin=checkpoint_margin,track_width=track_width, 
@@ -658,7 +657,6 @@ class simulate_car:
         self.steering_elasticity = 5 / self.fps  
         self.max_laser_length = 200
         
-        self.sensor_points = []
         self.sensor_angles = [-90, -45, 0, +45, +90] 
         
         # reset the parameters
@@ -822,7 +820,9 @@ class simulate_car:
                 
         # render the car
         screen.blit(rotated_car, rotated_car_rect)
-
+        
+        # these are all for debugging
+        """
         # draw the centre position 
         pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
         
@@ -832,7 +832,8 @@ class simulate_car:
              
         # draw the track outline
         for i in range(len(self.track_points)):
-            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)    
+            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)   
+        """
         
         return screen
     
@@ -859,24 +860,31 @@ class simulate_car:
         
         return screen
     
-    def get_sensor_ranges(self,  screen, outside_track_points, inside_track_points, track_points):
+    def get_sensor_ranges(self, outside_track_points, inside_track_points, track_points):
         
         # combine inside and outside track points
         track_points = outside_track_points + inside_track_points
         transition_idx = len(outside_track_points) - 1  
-        self.track_points = track_points
         
-        sensor_angles = self.sensor_angles
-        x_lines, track_x, common_y = self.get_sensor_lines(track_points=track_points, sensor_angles=sensor_angles)  
+        # this is for debugging 
+        # self.track_points = track_points
+        
+        # get sensor lines is 10x slower
+      
+        x_lines, track_x, common_y = self.get_sensor_lines(track_points=track_points, sensor_angles=self.sensor_angles)  
+      
+        
+        # this function is still slow
         
         sensor_points = []        
-        for idx, angle in enumerate(sensor_angles):
+        for idx, angle in enumerate(self.sensor_angles):
             sensor_point = self.get_single_sensor_range(track_points=track_points, transition_idx=transition_idx, x_lines=x_lines,
                                                   track_x=track_x, common_y=common_y, sensor_angle=angle, idx=idx)
             sensor_points.append(sensor_point)
-            
-        self.sensor_points = sensor_points       
-
+          
+        # for debugging
+        # self.sensor_points = sensor_points  
+        
         return sensor_points             
                     
     def get_sensor_lines(self, track_points, sensor_angles):

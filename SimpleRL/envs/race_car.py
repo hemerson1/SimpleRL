@@ -22,13 +22,14 @@ from SimpleRL.utils import generate_track, draw_map, simulate_car
 from SimpleRL.utils import init_video, save_frames, create_video
 
 # Testing
-import matplotlib.pyplot as plt
+import time
 
 class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: tidy up the checkpointing function
-    # TODO: add the state, reward and info
+    # TODO: the code needs a rework to make it run faster -> time the runs around cut 
+    # TODO: test functionality with render turned off
+    # TODO: shuffle round the debugging visualisations or remove them
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
         
@@ -70,9 +71,11 @@ class race_car_env(environment_base):
         self.environment_name = 'Race_car'
         self.action_dim = 1
         self.action_num = np.array([4], dtype=np.int32)
+        self.state_dim = 6
         
         self.height, self.width = 600, 800
         self.track_width = 60 
+        self.checkpoint_threshold = 1.1
         self.fps = 30        
         
         # Reset the environment parameters
@@ -117,22 +120,89 @@ class race_car_env(environment_base):
     def reset(self):
         
         # generate the new track points and checkpoints
-        self.track_points, self.checkpoints = generate_track(height=self.height, width=self.width, track_width=self.track_width)        
+        self.track_points, self.checkpoints = generate_track(height=self.height, width=self.width, track_width=self.track_width) 
         
-        # TODO: comment this and wrap below into a function 
+        # get the player start position, track edges and checkpoint edges
+        (self.start_point, self.start_angle, self.inside_track_points,
+         self.outside_track_points, self.checkpoint_edges) = self._set_track_edges(track_points=self.track_points, checkpoints=self.checkpoints)
+                
+        # initialise the car
+        self.car = simulate_car(fps=self.fps, starting_position=self.start_point, starting_angle=self.start_angle)
         
-        inside_track_points = []
-        outside_track_points = []
+        # get the state
+        if self.driver_mode == "default":
+            return self._process_state()            
+        
+        
+    def step(self, player_action=None):
+                
+        # change the form of the action
+        if self.driver_mode == "default":            
+            index = player_action[0]
+            empty_array = np.zeros((self.action_num), dtype=bool)
+            empty_array[index] = True
+            player_action = empty_array
+        
+        # update the state of the according to the action
+        self.car.process_action(action=player_action)
+        
+        # TODO: getting the collision points takes much longer 
+        # get the collision points take much longer than other parts of step
+        # it takes about 0.004 s
+        
+        tic = time.perf_counter()
+        
+        # get the updated sensor positions
+        self.sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
+                                                        inside_track_points=self.inside_track_points,
+                                                        track_points=self.track_points)
+        
+        toc = time.perf_counter()
+        
+        print('{} s'.format(toc - tic))
+        print('----------------------')
+        
+        # check whether the car has completed a lap or crashed
+        done, info = self._check_collisions(sensor_points=self.sensor_points)
+        
+        # determine the reward
+        reward = self._process_reward(information=info)        
+        
+        # display the map
+        if self.render: 
+            self._display() 
+            
+            # shut the display
+            if done:  self._close_display()
+        
+        # if there is an AI driver
+        if self.driver_mode == "default": 
+            
+            # get the state and output
+            state = self._process_state()            
+            return state, reward, done, info
+        
+        elif self.driver_mode == "human":   
+            return done
+        
+    """
+    Given the points of the track and the selected checkpoints get the starting
+    position of the car, the edges of the track and the edges of the checkpoints
+    """        
+    def _set_track_edges(self, track_points, checkpoints):
+        
+        # initialise the arrays and get the track radius
+        inside_track_points, outside_track_points = [], []
         radius = self.track_width // 2
-        final_angle = None
         
-        final_index = len(self.track_points) - 1 
-        for idx, point in enumerate(self.track_points):
+        # cycle through the points and calculate their edges based on the angle
+        final_index = len(track_points) - 1 
+        for idx, point in enumerate(track_points):
             
             # get the next and current point
             current_point = point
-            next_point = self.track_points[(idx + 30) % final_index]
-            prev_point = self.track_points[(idx - 30) % final_index]
+            next_point = track_points[(idx + 30) % final_index]
+            prev_point = track_points[(idx - 30) % final_index]
             
             # calculate an angle between the two points (in radians)
             angle = math.atan2(next_point[1] - prev_point[1], next_point[0] - prev_point[0])
@@ -150,11 +220,12 @@ class race_car_env(environment_base):
             # record the angle between the final point and the first 
             if idx == final_index:
                 final_angle = angle
-         
+                
         # get the start point of the car
-        start_point = self.checkpoints[0]
+        start_point = checkpoints[0]
         start_angle = final_angle
         
+        # cycle through the checkpoints and get their edge coordinates        
         checkpoint_edges = []        
         for idx, checkpoint in enumerate(self.checkpoints):
             
@@ -175,74 +246,98 @@ class race_car_env(environment_base):
             in_checkpoint_y = current_point[1] + radius * math.cos(angle) 
             
             checkpoint_edges.append([[out_checkpoint_x, out_checkpoint_y], [in_checkpoint_x, in_checkpoint_y]]) 
-        
-        # initialise the car
-        self.car = simulate_car(fps=self.fps, starting_position=start_point, starting_angle=start_angle)
-        
-        # set the inside and outside track points
-        self.inside_track_points = inside_track_points
-        self.outside_track_points = outside_track_points
-        
-        # update the checkpoint list
+            
+        # add the start point as the final checkpoint
         starting_checkpoint = checkpoint_edges.pop(0) 
         checkpoint_edges.append(starting_checkpoint)   
         
-        self.checkpoint_edges = checkpoint_edges
+        return start_point, start_angle, inside_track_points, outside_track_points, checkpoint_edges
+    
+    """
+    Return a numpy array containing the current sensor distances for the car
+    and its current speed
+    """
+    def _process_state(self):
         
-        # TODO: process the player state and return it
-        # How will the players state be detected?         
+        # get the car's speed
+        current_speed = self.car.speed             
         
-    def step(self, player_action=None):
-        
-        # process the action
-        self.car.process_action(action=player_action)
-        
-        sensor_points = self.car.get_sensor_ranges(screen=self.screen, 
-                                                  outside_track_points=self.outside_track_points, 
+        # get the sensor collision points
+        sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
                                                   inside_track_points=self.inside_track_points,
-                                                  track_points=self.track_points
-                                                  )
+                                                  track_points=self.track_points)  
+        # get the distances from car position
+        distances = [math.dist(self.car.position, sensor_point) for sensor_point in sensor_points]
+                  
+        # return the state of the environment                                          
+        return np.array(distances + [current_speed], dtype=np.float32) 
+    
+    """
+    Given the current sensor distances for the car, check if the car has crashed
+    and update the number of checkpoints its passed.
+    """    
+    def _check_collisions(self, sensor_points):
         
         # check for collisions with the edge of track
-        done = False
         crashed_front = math.dist(sensor_points[2], self.car.position) < (self.car.dimensions[0] / 2)
         crashed_side = math.dist(sensor_points[0], self.car.position) < (self.car.dimensions[1] / 2)
+        
+        # if a crash has occurred end the race
         if crashed_side or crashed_front:
-            done = True    
+            return True, {"outcome": "crash"}    
             
-        # check for checkpoint passings
+        # get the current position and the next checkpoint position 
         current_position = self.car.position
         next_checkpoint = self.checkpoint_edges[0]
         
+        # calculate the combined distance of the player form the edges
         outside_edge = math.dist(current_position, next_checkpoint[0])
         inside_edge = math.dist(current_position, next_checkpoint[1])
         combined_dist = outside_edge + inside_edge
         
-        if combined_dist < (1.1 * self.track_width):
-            
+        # if a checkpoint has been passed update the remaining checkpoints
+        if combined_dist < (self.checkpoint_threshold * self.track_width):
             self.checkpoint_edges.pop(0)
-            print('{} checkpoints remaining'.format(len(self.checkpoint_edges)))
             
+            # update the user
+            if self.render:
+                print('{} checkpoints remaining'.format(len(self.checkpoint_edges)))
+            
+            # if this was the last checkpoint end the game
             if len(self.checkpoint_edges) == 0:
-                done = True
-                print('Lap completed')
-        
-        # display the map
-        if self.render:
-            self._display() 
+                if self.render: print('Lap completed')
+                return True, {"outcome": "lap"}
             
-            # shut the display
-            if done: self._close_display()
-        
-        # if there is an AI driver
-        if self.driver_mode == "default":            
-            # state, reward, done, info
-            return self.grid_map.flatten(), reward, done, info
-        
-        elif self.driver_mode == "human":   
-            return done
-
+            # return state for checkpoint passed
+            return False, {"outcome": "checkpoint"}
             
+        return False, {"outcome": None}
+            
+    """
+    Calculate the agent reward using the outcome of the player action/
+    """
+    def _process_reward(self, information):
+        
+        # get the outcome
+        outcome = information["outcome"]
+        
+        # deduct reward for existing this turn
+        reward_total = -1
+        
+        # TODO: may need to increase crash penalty to avoid agent terminating
+        # to reduce existence penalty
+        
+        # add reward based on outcome
+        if outcome:
+            if outcome == "lap":
+                reward_total += 100            
+            elif outcome == "checkpoint":
+                reward_total += 10                
+            elif outcome == "crash":
+                reward_total -= 100
+                
+        return reward_total
+    
     def _init_display(self):
         
         # quit any previous games
@@ -274,18 +369,18 @@ class race_car_env(environment_base):
                                checkpoint_angle_offset=self.checkpoint_angle_offset, track_colour=self.grey, 
                                checkpoint_colour=self.blue, start_colour=self.red, background_colour=self.grass_green)  
 
-
-        for checkpoints in self.checkpoint_edges:
-            
+        
+        # this is for debugging
+        """
+        for checkpoints in self.checkpoint_edges:            
             pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[0], 3, 1)
             pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[1], 3, 1)
+        """
             
         
         # render the car
         self.screen = self.car.render_car(screen=self.screen, car_colour=self.yellow)        
-        
-        # TODO: fill in with specific code
-        
+                
         # save frames to the folder
         if self.render_mode == "video":            
             self.frame_count = save_frames(screen=self.screen, image_folder=self.image_folder, frame_count=self.frame_count)
@@ -308,9 +403,9 @@ class race_car_env(environment_base):
         
 if __name__ == "__main__": 
         
-    seed_range = 3
-    driver_mode = "human"
-    render = True
+    seed_range = 1
+    driver_mode = "default"
+    render = False
     
     # track the player wins out of max
     total_reward = 0
@@ -345,7 +440,12 @@ if __name__ == "__main__":
                 done = env.step(player_action=action)
                 
             elif driver_mode == "default":
+                
+                action = np.random.randint(0, 4, size=(1,))                
                 next_state, reward, done, info = env.step(player_action=action)
+                
+                if info['outcome'] == "crash":
+                    print('Crash')
             
                 if reward > 0:
                     total_reward += reward
@@ -353,8 +453,7 @@ if __name__ == "__main__":
                 state = next_state
                 
             counter += 1            
-            #if counter >= 1000:
-            #    done = True
-            #    env._close_display()
+            if counter >= 1000:
+                done = True
         
     
