@@ -27,9 +27,11 @@ import time
 class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
-    # TODO: the code needs a rework to make it run faster -> time the runs around cut 
-    # TODO: test functionality with render turned off
+    # TODO: trying doing some greater optimising -> move code which doesn't change outside of loops
     # TODO: shuffle round the debugging visualisations or remove them
+    # TODO: may need to tweak the balance between reducing no of track points and increasing error margin
+    # TODO: may need to increase crash penalty to avoid agent terminating
+    #       to reduce existence penalty
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
         
@@ -146,21 +148,17 @@ class race_car_env(environment_base):
         # update the state of the according to the action
         self.car.process_action(action=player_action)
         
-        # TODO: getting the collision points takes much longer 
-        # get the collision points take much longer than other parts of step
-        # it takes about 0.004 s
-        
-        tic = time.perf_counter()
+        #tic = time.perf_counter()
         
         # get the updated sensor positions
         self.sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
                                                         inside_track_points=self.inside_track_points,
                                                         track_points=self.track_points)
         
-        toc = time.perf_counter()
         
-        print('{} s'.format(toc - tic))
-        print('----------------------')
+        #toc = time.perf_counter()
+        
+        #print('{}s'.format(toc - tic))
         
         # check whether the car has completed a lap or crashed
         done, info = self._check_collisions(sensor_points=self.sensor_points)
@@ -220,6 +218,10 @@ class race_car_env(environment_base):
             # record the angle between the final point and the first 
             if idx == final_index:
                 final_angle = angle
+                
+        # removes error of appending inside and outside
+        inside_track_points += inside_track_points[:5]
+        outside_track_points += outside_track_points[:5]
                 
         # get the start point of the car
         start_point = checkpoints[0]
@@ -324,9 +326,6 @@ class race_car_env(environment_base):
         # deduct reward for existing this turn
         reward_total = -1
         
-        # TODO: may need to increase crash penalty to avoid agent terminating
-        # to reduce existence penalty
-        
         # add reward based on outcome
         if outcome:
             if outcome == "lap":
@@ -375,8 +374,7 @@ class race_car_env(environment_base):
         for checkpoints in self.checkpoint_edges:            
             pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[0], 3, 1)
             pygame.draw.circle(self.screen, (0, 0, 255), checkpoints[1], 3, 1)
-        """
-            
+        """            
         
         # render the car
         self.screen = self.car.render_car(screen=self.screen, car_colour=self.yellow)        
@@ -404,7 +402,7 @@ class race_car_env(environment_base):
 if __name__ == "__main__": 
         
     seed_range = 1
-    driver_mode = "default"
+    driver_mode = "human"
     render = False
     
     # track the player wins out of max
@@ -413,8 +411,8 @@ if __name__ == "__main__":
     for seed in range(seed_range):
     
         # intialise the environment
-        env = race_car_env(seed=seed, render=False, driver_mode=driver_mode)
-        
+        env = race_car_env(seed=seed, render=render, driver_mode=driver_mode)
+
         # reset the state
         done, counter = False, 0
         if driver_mode == "default":
@@ -453,7 +451,9 @@ if __name__ == "__main__":
                 state = next_state
                 
             counter += 1            
-            if counter >= 1000:
+            if counter >= 1000 and driver_mode == "default":
                 done = True
+                
+        print('Ep {} - Timesteps {}'.format(seed, counter))
         
     

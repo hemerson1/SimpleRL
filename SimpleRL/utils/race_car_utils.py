@@ -10,8 +10,9 @@ import numpy as np
 import math
 import pygame 
 import random 
-import scipy
-from scipy import interpolate
+import scipy.spatial as spatial
+import scipy.interpolate as interpolate
+import warnings
 
 # Testing 
 import time
@@ -62,9 +63,9 @@ def generate_track(track_width, width, height):
                            min_distance=min_distance, width=width, height=height)
     
     # calculate the convex hull of the random points
-    hull = scipy.spatial.ConvexHull(points) # convex_hull(points)    
+    hull = spatial.ConvexHull(points) # convex_hull(points)    
     hull_points = np.array([points[hull.vertices[i]] for i in range(len(hull.vertices))])
-    
+
     # get the points of the track
     track_points = shape_track(hull_points, difficulty=difficulty, max_displacement=max_displacement, margin=margin, track_width=track_width,
                              max_angle=max_angle, distance_between_points=distance_between_points, width=width, height=height)
@@ -295,7 +296,7 @@ one another
 def push_points_apart(points, distance):
     
     for i in range(len(points)):
-        for j in range(i+1, len(points)):
+        for j in range(i + 1, len(points)):
             
             # get distance between 2 points 
             p_distance =  math.dist(points[i], points[j])
@@ -330,30 +331,44 @@ Take a set of point and smooth the boundaries by approximating the shape
 using a B-spline function.
 """
 def smooth_track(track_points, spline_points): 
+        
+    x, y = zip(*track_points)
+    x, y = list(x), list(y)        
     
-    x = np.array([p[0] for p in track_points])
-    y = np.array([p[1] for p in track_points])
+    # check that consective inputs are not the same as this causes an error
+    x = [x[idx] + 1 if x[idx] == x[idx + 1] else x[idx] for idx in range(len(x) - 1)] 
+    y = [y[idx] + 1 if y[idx] == y[idx + 1] else y[idx] for idx in range(len(y) - 1)] 
     
-    # append the starting x,y coordinates
-    x = np.r_[x, x[0]]
-    y = np.r_[y, y[0]]
+    # append the first value to the end
+    x.append(x[0])
+    y.append(y[0])
+        
+    # remove the runtime warning
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
     
-    # fit splines to x=f(u) and y=g(u), treating both as periodic. also note that s=0
-    # is needed in order to force the spline fit to pass through all the input points.
-    tck, _ = interpolate.splprep([x, y], s=0, per=True)   
-
+        # fit splines to x=f(u) and y=g(u), treating both as periodic. also note that s=0
+        # is needed in order to force the spline fit to pass through all the input points.
+        tck, _ = interpolate.splprep([x, y], s=0, per=True)   
+    
     # evaluate the spline fits for # points evenly spaced distance values
     xi, yi = interpolate.splev(np.linspace(0, 1, spline_points), tck)
     return [(int(xi[i]), int(yi[i])) for i in range(len(xi))]    
+
+    
+"""
+An alternative implemenation of smooth track to avoid the scipy dependency. 
+However, this function creates lines with discontinuities between the first and
+last point.
+"""
+def smooth_track_alternative(track_points, spline_points):
     
     # TODO: this B-spline function is not working as intended 
     # -> the last point does not connect continuously
         
     # get x and y in the appropriate format
     x, y = zip(*track_points)
-    x, y = list(x), list(y)    
-    x.append(x[0])
-    y.append(y[0])
+    x, y = list(x) + [x[0]], list(y) + [y[0]]   
     
     k, H = 3, len(x) - 1
         
@@ -369,7 +384,8 @@ def smooth_track(track_points, spline_points):
     knot_new = knot_vector(p_centripetal_new, k, H)
     P_piece = curve(P_control, H, k, p_piece, knot_new)
 
-    return [(int(P_piece[0][idx]), int(P_piece[1][idx])) for idx in range(len(P_piece[0]))]    
+    return [(int(P_piece[0][idx]), int(P_piece[1][idx])) for idx in range(len(P_piece[0]))]  
+    
 
 """
 Calculate a B-spline curve from a set of points
@@ -821,8 +837,7 @@ class simulate_car:
         # render the car
         screen.blit(rotated_car, rotated_car_rect)
         
-        # these are all for debugging
-        """
+        # these are all for debugging ----------------------------
         # draw the centre position 
         pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
         
@@ -833,11 +848,14 @@ class simulate_car:
         # draw the track outline
         for i in range(len(self.track_points)):
             pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)   
-        """
+            
+        # --------------------------------------------------------
         
         return screen
     
-    
+    """
+    Draw a laser given its angle and its position.
+    """    
     def draw_laser(self, screen, sensor_angle, sensor_point):
         
         # calculate the distance to a collision
@@ -860,22 +878,22 @@ class simulate_car:
         
         return screen
     
+    """
+    Get the collision points of the sensors used by the car.    
+    """    
     def get_sensor_ranges(self, outside_track_points, inside_track_points, track_points):
         
-        # combine inside and outside track points
-        track_points = outside_track_points + inside_track_points
-        transition_idx = len(outside_track_points) - 1  
+        # combine inside and outside track points (selecting every 4 points)
+        track_points = outside_track_points[::5] + inside_track_points[::5]
+        transition_idx = len(outside_track_points[::5]) - 1  
         
         # this is for debugging 
-        # self.track_points = track_points
+        self.track_points = track_points
         
-        # get sensor lines is 10x slower
-      
+        # get sensor lines is 10x slower   
         x_lines, track_x, common_y = self.get_sensor_lines(track_points=track_points, sensor_angles=self.sensor_angles)  
-      
-        
-        # this function is still slow
-        
+              
+        # this function is still slow        
         sensor_points = []        
         for idx, angle in enumerate(self.sensor_angles):
             sensor_point = self.get_single_sensor_range(track_points=track_points, transition_idx=transition_idx, x_lines=x_lines,
@@ -883,47 +901,32 @@ class simulate_car:
             sensor_points.append(sensor_point)
           
         # for debugging
-        # self.sensor_points = sensor_points  
+        self.sensor_points = sensor_points  
         
-        return sensor_points             
-                    
+        return sensor_points
+
+    """
+    Get the lines of the sensors 
+    """                    
     def get_sensor_lines(self, track_points, sensor_angles):
         
-        # get the range of sensor data
-        x_laser_lengths, y_laser_lengths = [], []          
-        for angle in sensor_angles:            
-            input_angle = (self.angle + math.radians(angle)) % (2 * math.pi) 
-            x_laser_length, y_laser_length = math.cos(input_angle) * self.max_laser_length, math.sin(input_angle) * self.max_laser_length
-            
-            # append the lengths
-            x_laser_lengths.append(x_laser_length)
-            y_laser_lengths.append(y_laser_length)            
+        # get the range of sensor data        
+        true_angles = [(self.angle + math.radians(angle)) % (2 * math.pi) for angle in sensor_angles]
+        x_laser_lengths, y_laser_lengths = zip(*[(math.cos(angle) * self.max_laser_length, math.sin(angle) * self.max_laser_length) for angle in true_angles])
         
         # get the x and y track points
         x, y = zip(*track_points)
                         
         # extract the track values which fall in range
-        track_x, common_y = [], []
-        x_lines = []
+        common_y, track_x = y, x
         
-        for i, y_val in enumerate(y):   
-                
-            # get the common y_values
-            common_y.append(y_val)
-            
-            # get the track x_value
-            track_x.append(x[i])         
+        x_lines = []
+        for i, y_val in enumerate(y):        
             
             # get the line x values 
-            intercept_x = []
-            for idx, x_laser_length in enumerate(x_laser_lengths):
-                              
-                # calculate the gradient
-                gradient = (x_laser_length / y_laser_lengths[idx])                
-                x_val = (y_val - self.position[1]) * gradient + self.position[0]    
-                
-                intercept_x.append(x_val)
-              
+            x_pos, y_pos = self.position[0], self.position[1]
+            intercept_x = [(y_val - y_pos) * (x_laser / y_laser_lengths[idx]) + x_pos for idx, x_laser in enumerate(x_laser_lengths)]
+                          
             # update the total list
             x_lines.append(intercept_x)   
         
@@ -939,25 +942,28 @@ class simulate_car:
                     
                     
     def get_single_sensor_range(self, track_points, transition_idx, x_lines, track_x, common_y, sensor_angle, idx=0):        
-            
+        
+        # get the adjusted angle
         input_angle = (self.angle + math.radians(sensor_angle)) %  (2 * math.pi)
         x_line = x_lines[:, idx]
         
         # get the intercept indexes and their values
-        x_idx = np.argwhere(np.diff(np.sign(x_line - track_x))).flatten() 
+        x_idx = np.argwhere(np.diff(np.sign(x_line - track_x))).flatten()
         
-        x_vals = [(track_x[idx] - self.position[0]) for idx in x_idx if idx != transition_idx]
-        y_vals = [(common_y[idx] - self.position[1]) for idx in x_idx if idx != transition_idx]
+        # get the adjusted differences
+        x_pos, y_pos = self.position[0], self.position[1]        
+        x_vals, y_vals = zip(*[(track_x[idx] - x_pos, common_y[idx] - y_pos) for idx in x_idx if idx != transition_idx])
         
         # ensure the collisions are only measured forward with a small factor for error
+        error_margin = 12
         if input_angle > 0 and input_angle <= math.pi / 2:            
-            correct_dir = [x for idx, x in enumerate(x_vals) if (x + 3 >= 0 and y_vals[idx] + 3  >= 0)]            
+            correct_dir = [x for idx, x in enumerate(x_vals) if (x + error_margin >= 0 and y_vals[idx] + error_margin  >= 0)]            
         elif input_angle > math.pi / 2 and input_angle <= math.pi:
-            correct_dir = [x for idx, x in enumerate(x_vals) if x - 3 <= 0 and y_vals[idx] + 3 >= 0]            
+            correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] + error_margin >= 0]            
         elif input_angle > math.pi and input_angle <= 3/2 * math.pi:
-            correct_dir = [x for idx, x in enumerate(x_vals) if x - 3 <= 0 and y_vals[idx] - 3 <= 0]        
+            correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] - error_margin <= 0]        
         else:
-            correct_dir = [x for idx, x in enumerate(x_vals)if x + 3 >= 0 and y_vals[idx] - 3 <= 0]   
+            correct_dir = [x for idx, x in enumerate(x_vals)if x + error_margin >= 0 and y_vals[idx] - error_margin <= 0]   
             
         # get the smallest forward collision     
         correct_dist = [math.sqrt(x ** 2 + y_vals[x_vals.index(x)] ** 2)  for x in correct_dir] 
