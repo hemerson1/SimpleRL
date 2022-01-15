@@ -825,7 +825,7 @@ class simulate_car:
     Render the car's position, rotation and the laser's it uses for sensing the
     environment.
     """    
-    def render_car(self, screen, car_colour):
+    def render_car(self, screen, car_colour, debugging=False):
         
         # create the car surface
         car_surface = draw_rectangle(self.dimensions, car_colour, line_thickness=1, fill=True)    
@@ -837,19 +837,17 @@ class simulate_car:
         # render the car
         screen.blit(rotated_car, rotated_car_rect)
         
-        # these are all for debugging ----------------------------
-        # draw the centre position 
-        pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
-        
-        # draw on the individual laser
-        for idx, angle in enumerate(self.sensor_angles):
-            screen = self.draw_laser(screen=screen, sensor_angle=angle, sensor_point=self.sensor_points[idx])                    
-             
-        # draw the track outline
-        for i in range(len(self.track_points)):
-            pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)   
+        if debugging:
+            # draw the centre position 
+            pygame.draw.circle(screen, (255, 0, 0), self.position, 3, 1)     
             
-        # --------------------------------------------------------
+            # draw on the individual laser
+            for idx, angle in enumerate(self.sensor_angles):
+                screen = self.draw_laser(screen=screen, sensor_angle=angle, sensor_point=self.sensor_points[idx])                    
+                 
+            # draw the track outline
+            for i in range(len(self.track_points)):
+                pygame.draw.circle(screen, (255, 0, 0), list(self.track_points[i]), 3, 1)   
         
         return screen
     
@@ -881,14 +879,11 @@ class simulate_car:
     """
     Get the collision points of the sensors used by the car.    
     """    
-    def get_sensor_ranges(self, outside_track_points, inside_track_points, track_points):
+    def get_sensor_ranges(self, outside_track_points, inside_track_points, track_points, debugging=False):
         
         # combine inside and outside track points (selecting every 4 points)
         track_points = outside_track_points[::5] + inside_track_points[::5]
-        transition_idx = len(outside_track_points[::5]) - 1  
-        
-        # this is for debugging 
-        self.track_points = track_points
+        transition_idx = len(outside_track_points[::5]) - 1      
         
         # get sensor lines is 10x slower   
         x_lines, track_x, common_y = self.get_sensor_lines(track_points=track_points, sensor_angles=self.sensor_angles)  
@@ -901,7 +896,9 @@ class simulate_car:
             sensor_points.append(sensor_point)
           
         # for debugging
-        self.sensor_points = sensor_points  
+        if debugging:
+            self.track_points = track_points
+            self.sensor_points = sensor_points  
         
         return sensor_points
 

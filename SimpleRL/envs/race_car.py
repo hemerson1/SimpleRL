@@ -28,7 +28,6 @@ class race_car_env(environment_base):
     
     # TODO: remove inefficiency in the code (i.e. repeated expressions, improve speed)
     # TODO: trying doing some greater optimising -> move code which doesn't change outside of loops
-    # TODO: shuffle round the debugging visualisations or remove them
     # TODO: may need to tweak the balance between reducing no of track points and increasing error margin
     # TODO: may need to increase crash penalty to avoid agent terminating
     #       to reduce existence penalty
@@ -62,6 +61,9 @@ class race_car_env(environment_base):
         self.render_mode = render_mode
         self.seed = seed 
         self.driver_mode = driver_mode
+        
+        # Debugging
+        self.debugging = False
         
         # set render to true if human driver
         if self.driver_mode == "human":
@@ -137,6 +139,9 @@ class race_car_env(environment_base):
         
         
     def step(self, player_action=None):
+        
+        # actions:
+        # 0 = decelerate | 1 = accelerate | 2 = left | 3 = right
                 
         # change the form of the action
         if self.driver_mode == "default":            
@@ -148,17 +153,17 @@ class race_car_env(environment_base):
         # update the state of the according to the action
         self.car.process_action(action=player_action)
         
-        #tic = time.perf_counter()
+        if self.debugging:
+            tic = time.perf_counter()
         
         # get the updated sensor positions
         self.sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
                                                         inside_track_points=self.inside_track_points,
                                                         track_points=self.track_points)
         
-        
-        #toc = time.perf_counter()
-        
-        #print('{}s'.format(toc - tic))
+        if self.debugging:
+            toc = time.perf_counter()        
+            print('{}s'.format(toc - tic))
         
         # check whether the car has completed a lap or crashed
         done, info = self._check_collisions(sensor_points=self.sensor_points)
@@ -267,7 +272,9 @@ class race_car_env(environment_base):
         # get the sensor collision points
         sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
                                                   inside_track_points=self.inside_track_points,
-                                                  track_points=self.track_points)  
+                                                  track_points=self.track_points,
+                                                  debugging=self.debugging
+                                                  )  
         # get the distances from car position
         distances = [math.dist(self.car.position, sensor_point) for sensor_point in sensor_points]
                   
@@ -377,7 +384,7 @@ class race_car_env(environment_base):
         """            
         
         # render the car
-        self.screen = self.car.render_car(screen=self.screen, car_colour=self.yellow)        
+        self.screen = self.car.render_car(screen=self.screen, car_colour=self.yellow, debugging=self.debugging)        
                 
         # save frames to the folder
         if self.render_mode == "video":            
@@ -454,6 +461,6 @@ if __name__ == "__main__":
             if counter >= 1000 and driver_mode == "default":
                 done = True
                 
-        print('Ep {} - Timesteps {}'.format(seed, counter))
+        print('Ep {} - Lap completed in {} timesteps'.format(seed, counter))
         
     
