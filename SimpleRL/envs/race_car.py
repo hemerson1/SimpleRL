@@ -31,6 +31,8 @@ class race_car_env(environment_base):
     # TODO: may need to tweak the balance between reducing no of track points and increasing error margin
     # TODO: may need to increase crash penalty to avoid agent terminating
     #       to reduce existence penalty
+    # TODO: add import to shortcut in init.py
+    
     
     def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
         

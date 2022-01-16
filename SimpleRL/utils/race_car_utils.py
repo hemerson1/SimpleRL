@@ -335,9 +335,9 @@ def smooth_track(track_points, spline_points):
     x, y = zip(*track_points)
     x, y = list(x), list(y)        
     
-    # check that consective inputs are not the same as this causes an error
-    x = [x[idx] + 1 if x[idx] == x[idx + 1] else x[idx] for idx in range(len(x) - 1)] 
-    y = [y[idx] + 1 if y[idx] == y[idx + 1] else y[idx] for idx in range(len(y) - 1)] 
+    # check that consecutive inputs are not the same as this causes an error
+    x = [x[idx] + 1 + (x[(idx - 1)  % len(x)] == x[idx] + 1) * 1 if x[idx] == x[(idx + 1) % len(x)] else x[idx] for idx in range(len(x))] 
+    y = [y[idx] + 1 + (y[(idx - 1)  % len(y)] == y[idx] + 1) * 1 if y[idx] == y[(idx + 1) % len(y)] else y[idx] for idx in range(len(y))] 
     
     # append the first value to the end
     x.append(x[0])
@@ -357,7 +357,7 @@ def smooth_track(track_points, spline_points):
 
     
 """
-An alternative implemenation of smooth track to avoid the scipy dependency. 
+An alternative implementation of smooth track to avoid the scipy dependency. 
 However, this function creates lines with discontinuities between the first and
 last point.
 """
@@ -920,9 +920,9 @@ class simulate_car:
         x_lines = []
         for i, y_val in enumerate(y):        
             
-            # get the line x values 
+            # get the line x values (added small factor to stop division by zero error)
             x_pos, y_pos = self.position[0], self.position[1]
-            intercept_x = [(y_val - y_pos) * (x_laser / y_laser_lengths[idx]) + x_pos for idx, x_laser in enumerate(x_laser_lengths)]
+            intercept_x = [(y_val - y_pos) * (x_laser / (y_laser_lengths[idx] + 1e-5)) + x_pos for idx, x_laser in enumerate(x_laser_lengths)]
                           
             # update the total list
             x_lines.append(intercept_x)   
@@ -947,40 +947,43 @@ class simulate_car:
         # get the intercept indexes and their values
         x_idx = np.argwhere(np.diff(np.sign(x_line - track_x))).flatten()
         
-        # get the adjusted differences
-        x_pos, y_pos = self.position[0], self.position[1]        
-        x_vals, y_vals = zip(*[(track_x[idx] - x_pos, common_y[idx] - y_pos) for idx in x_idx if idx != transition_idx])
-        
-        # ensure the collisions are only measured forward with a small factor for error
-        error_margin = 12
-        if input_angle > 0 and input_angle <= math.pi / 2:            
-            correct_dir = [x for idx, x in enumerate(x_vals) if (x + error_margin >= 0 and y_vals[idx] + error_margin  >= 0)]            
-        elif input_angle > math.pi / 2 and input_angle <= math.pi:
-            correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] + error_margin >= 0]            
-        elif input_angle > math.pi and input_angle <= 3/2 * math.pi:
-            correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] - error_margin <= 0]        
-        else:
-            correct_dir = [x for idx, x in enumerate(x_vals)if x + error_margin >= 0 and y_vals[idx] - error_margin <= 0]   
-            
-        # get the smallest forward collision     
-        correct_dist = [math.sqrt(x ** 2 + y_vals[x_vals.index(x)] ** 2)  for x in correct_dir] 
-        
-        # get the correct x index
+        # added to stop not enough values to unpack with zip
         sensor_point = [100_000, 100_000]
-        if len(correct_dist) > 0:
+        if len(x_idx) > 0:
+        
+            # get the adjusted differences
+            x_pos, y_pos = self.position[0], self.position[1]        
+            x_vals, y_vals = zip(*[(track_x[idx] - x_pos, common_y[idx] - y_pos) for idx in x_idx if idx != transition_idx])
             
-            # get the correct index
-            min_dist = min(correct_dist)
-            min_dist_index = correct_dist.index(min_dist)
-            correct_x = correct_dir[min_dist_index]
-            correct_x_index = x_vals.index(correct_x)         
+            # ensure the collisions are only measured forward with a small factor for error
+            error_margin = 12
+            if input_angle > 0 and input_angle <= math.pi / 2:            
+                correct_dir = [x for idx, x in enumerate(x_vals) if (x + error_margin >= 0 and y_vals[idx] + error_margin  >= 0)]            
+            elif input_angle > math.pi / 2 and input_angle <= math.pi:
+                correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] + error_margin >= 0]            
+            elif input_angle > math.pi and input_angle <= 3/2 * math.pi:
+                correct_dir = [x for idx, x in enumerate(x_vals) if x - error_margin <= 0 and y_vals[idx] - error_margin <= 0]        
+            else:
+                correct_dir = [x for idx, x in enumerate(x_vals)if x + error_margin >= 0 and y_vals[idx] - error_margin <= 0]   
+                
+            # get the smallest forward collision     
+            correct_dist = [math.sqrt(x ** 2 + y_vals[x_vals.index(x)] ** 2)  for x in correct_dir] 
             
-            # get the x position
-            chosen_x = x_vals[correct_x_index]
-             
-            # set the point if it is less than the max distance
-            if min_dist <= self.max_laser_length:                
-                sensor_point = [chosen_x + self.position[0], y_vals[correct_x_index] + self.position[1]]
+            # get the correct x index
+            if len(correct_dist) > 0:
+                
+                # get the correct index
+                min_dist = min(correct_dist)
+                min_dist_index = correct_dist.index(min_dist)
+                correct_x = correct_dir[min_dist_index]
+                correct_x_index = x_vals.index(correct_x)         
+                
+                # get the x position
+                chosen_x = x_vals[correct_x_index]
+                 
+                # set the point if it is less than the max distance
+                if min_dist <= self.max_laser_length:                
+                    sensor_point = [chosen_x + self.position[0], y_vals[correct_x_index] + self.position[1]]
         
         return sensor_point
         
