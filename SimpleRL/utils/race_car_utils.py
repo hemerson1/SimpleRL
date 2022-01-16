@@ -336,9 +336,8 @@ def smooth_track(track_points, spline_points):
     x, y = list(x), list(y)        
     
     # check that consecutive inputs are not the same as this causes an error
-    x = [x[idx] + 1 + (x[(idx - 1)  % len(x)] == x[idx] + 1) * 1 if x[idx] == x[(idx + 1) % len(x)] else x[idx] for idx in range(len(x))] 
-    y = [y[idx] + 1 + (y[(idx - 1)  % len(y)] == y[idx] + 1) * 1 if y[idx] == y[(idx + 1) % len(y)] else y[idx] for idx in range(len(y))] 
-    
+    x = [x[idx] + random.uniform(0, 1) for idx in range(len(x))] 
+        
     # append the first value to the end
     x.append(x[0])
     y.append(y[0])
@@ -992,8 +991,8 @@ class simulate_car:
 if __name__ == '__main__':
     
     # test params
-    display = True
-    seeds = 1   
+    display = False
+    seeds = 100000
     
     # get screen params
     width = 800
@@ -1018,8 +1017,11 @@ if __name__ == '__main__':
         
     for seed in range(seeds):
         
+        print('Seed {}'.format(seed))
+        
         # set the seed
         random.seed(seed)
+        np.random.seed(seed)
         
         # get the coords
         f_points, checkpoints = generate_track(track_width=track_width, width=width, height=height)
