@@ -56,7 +56,7 @@ def generate_track(track_width, width, height):
     spline_points = 1000
     
     # parameters for get checkpoints
-    number_checkpoints = 10    
+    number_checkpoints = 20  
 
     # generate a set of random points
     points = random_points(min_p=min_points, max_p=max_points, margin=margin,
@@ -991,8 +991,8 @@ class simulate_car:
 if __name__ == '__main__':
     
     # test params
-    display = False
-    seeds = 100000
+    display = True
+    seeds = 1
     
     # get screen params
     width = 800
@@ -1006,7 +1006,7 @@ if __name__ == '__main__':
     grey = (186, 182, 168)
     
     # function params
-    track_width = 40
+    track_width = 60
     checkpoint_margin = 5
     checkpoint_angle_offset = 3
     
@@ -1019,9 +1019,12 @@ if __name__ == '__main__':
         
         print('Seed {}'.format(seed))
         
+        test = np.random.randint(0, 100000)        
+        print(test)
+        
         # set the seed
-        random.seed(seed)
-        np.random.seed(seed)
+        random.seed(test)
+        np.random.seed(test)
         
         # get the coords
         f_points, checkpoints = generate_track(track_width=track_width, width=width, height=height)

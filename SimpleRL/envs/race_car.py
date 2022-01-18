@@ -30,11 +30,9 @@ class race_car_env(environment_base):
     # TODO: trying doing some greater optimising -> move code which doesn't change outside of loops
     # TODO: may need to tweak the balance between reducing no of track points and increasing error margin
     # TODO: may need to increase crash penalty to avoid agent terminating
-    #       to reduce existence penalty
-    # TODO: add import to shortcut in init.py
+    #       to reduce existence penalty   
     
-    
-    def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human"):
+    def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human", use_random_tracks=False):
         
         # Get assertion errors
         
@@ -70,6 +68,12 @@ class race_car_env(environment_base):
         # set render to true if human driver
         if self.driver_mode == "human":
             self.render = True
+            
+        # run only tracks which are definitely well generated
+        if not use_random_tracks:
+            safe_seeds = np.array([25027, 57447, 15848,
+                                   1944, 22906, 29030, 90129], dtype=np.int32)
+            self.seed = np.random.choice(safe_seeds, 1)[0]
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
@@ -411,8 +415,8 @@ class race_car_env(environment_base):
 if __name__ == "__main__": 
         
     seed_range = 1
-    driver_mode = "human"
-    render = False
+    driver_mode = "default"
+    render = True
     
     # track the player wins out of max
     total_reward = 0
@@ -420,12 +424,12 @@ if __name__ == "__main__":
     for seed in range(seed_range):
     
         # intialise the environment
-        env = race_car_env(seed=seed, render=render, driver_mode=driver_mode)
+        env = race_car_env(render=render, driver_mode=driver_mode, use_random_tracks=False)
 
         # reset the state
         done, counter = False, 0
         if driver_mode == "default":
-            state = env.reset
+            state = env.reset()
         
         # run the training loop
         while not done:
@@ -454,8 +458,7 @@ if __name__ == "__main__":
                 if info['outcome'] == "crash":
                     print('Crash')
             
-                if reward > 0:
-                    total_reward += reward
+                total_reward += reward
                     
                 state = next_state
                 
@@ -464,5 +467,6 @@ if __name__ == "__main__":
                 done = True
                 
         print('Ep {} - Lap completed in {} timesteps'.format(seed, counter))
+        print('reward {}'.format(total_reward))
         
     
