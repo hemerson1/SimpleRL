@@ -30,9 +30,9 @@ class race_car_env(environment_base):
     # TODO: trying doing some greater optimising -> move code which doesn't change outside of loops
     # TODO: may need to tweak the balance between reducing no of track points and increasing error margin
     # TODO: may need to increase crash penalty to avoid agent terminating
-    #       to reduce existence penalty   
+    #       to reduce existence penalty  
     
-    def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human", use_random_tracks=False):
+    def __init__(self, render=False, seed=None, render_mode="default", driver_mode="human", use_selected_tracks=True):
         
         # Get assertion errors
         
@@ -54,7 +54,8 @@ class race_car_env(environment_base):
         print('Render: {}'.format(render))        
         print('Seed: {}'.format(seed))
         print('Render Mode: {}'.format(render_mode))   
-        print('Driver Mode: {}'.format(driver_mode))  
+        print('Driver Mode: {}'.format(driver_mode)) 
+        print('Use Selected Tracks: {}'.format(use_selected_tracks))
         print('--------------------')
         
         self.render = render 
@@ -70,17 +71,19 @@ class race_car_env(environment_base):
             self.render = True
             
         # run only tracks which are definitely well generated
-        if not use_random_tracks:
-            safe_seeds = np.array([25027, 57447, 15848,
-                                   1944, 22906, 29030, 90129], dtype=np.int32)
+        if use_selected_tracks:
+            safe_seeds = np.array([25027, 57447, 12855, 97307, 32899,
+                                   1944, 22906, 29030, 90129, 93030], dtype=np.int32)
             self.seed = np.random.choice(safe_seeds, 1)[0]
+            
+            print(self.seed)
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
         random.seed(self.seed)
         self.environment_name = 'Race_car'
         self.action_dim = 1
-        self.action_num = np.array([4], dtype=np.int32)
+        self.action_num = np.array([3], dtype=np.int32)
         self.state_dim = 6
         
         self.height, self.width = 600, 800
@@ -147,7 +150,7 @@ class race_car_env(environment_base):
     def step(self, player_action=None):
         
         # actions:
-        # 0 = decelerate | 1 = accelerate | 2 = left | 3 = right
+        # 0 = brake | 1 = left | 2 = right
                 
         # change the form of the action
         if self.driver_mode == "default":            
@@ -342,11 +345,11 @@ class race_car_env(environment_base):
         # add reward based on outcome
         if outcome:
             if outcome == "lap":
-                reward_total += 100            
+                reward_total += 1000            
             elif outcome == "checkpoint":
-                reward_total += 10                
+                reward_total += 100                
             elif outcome == "crash":
-                reward_total -= 100
+                reward_total -= 1000
                 
         return reward_total
     
@@ -410,26 +413,29 @@ class race_car_env(environment_base):
         # create a video
         if self.render_mode == 'video':    
             create_video(image_folder=self.image_folder, video_folder=self.video_folder, fps=self.fps)
-        
-        
+                
 if __name__ == "__main__": 
         
     seed_range = 1
-    driver_mode = "default"
+    driver_mode = "human" # "default"
     render = True
     
     # track the player wins out of max
-    total_reward = 0
+    total_reward = 0        
     
     for seed in range(seed_range):
     
         # intialise the environment
-        env = race_car_env(render=render, driver_mode=driver_mode, use_random_tracks=False)
+        env = race_car_env(render=render, driver_mode=driver_mode, use_selected_tracks=True)
 
         # reset the state
         done, counter = False, 0
         if driver_mode == "default":
-            state = env.reset()
+            state = env.reset() 
+            
+        elif driver_mode == "human":
+            started = False
+            done = env.step(player_action=[False] * 3)
         
         # run the training loop
         while not done:
@@ -437,22 +443,28 @@ if __name__ == "__main__":
             if driver_mode == "human":
                 
                 # get the human action
-                action = [False] * 4
-                keys = pygame.key.get_pressed()                
-                if keys[pygame.K_DOWN]:
+                action = [False] * 3
+                keys = pygame.key.get_pressed()  
+                
+                # have brake on until player presses up key
+                if not started:
                     action[0] = True
-                if keys[pygame.K_UP]:
-                    action[1] = True
+                    
+                if keys[pygame.K_UP]:                    
+                    started = True                
+                if keys[pygame.K_DOWN]:                    
+                    action[0] = True
                 if keys[pygame.K_LEFT]:
-                    action[2] = True
+                    action[1] = True
                 if keys[pygame.K_RIGHT]:                    
-                    action[3] = True
-                            
+                    action[2] = True
+                    
                 done = env.step(player_action=action)
+                counter += 1
                 
             elif driver_mode == "default":
                 
-                action = np.random.randint(0, 4, size=(1,))                
+                action = np.random.randint(0, 3, size=(1,))                
                 next_state, reward, done, info = env.step(player_action=action)
                 
                 if info['outcome'] == "crash":
@@ -462,9 +474,9 @@ if __name__ == "__main__":
                     
                 state = next_state
                 
-            counter += 1            
-            if counter >= 1000 and driver_mode == "default":
-                done = True
+                counter += 1            
+                if counter >= 1000:
+                    done = True
                 
         print('Ep {} - Lap completed in {} timesteps'.format(seed, counter))
         print('reward {}'.format(total_reward))

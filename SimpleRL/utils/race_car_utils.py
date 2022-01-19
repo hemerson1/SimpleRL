@@ -668,7 +668,7 @@ class simulate_car:
         self.max_steering_angle = math.pi / 2
         self.acceleration_rate = 10
         self.velocity_dampening = 30
-        self.max_speed = 300
+        self.max_speed = 200
         self.steering_elasticity = 5 / self.fps  
         self.max_laser_length = 200
         
@@ -695,22 +695,21 @@ class simulate_car:
     def process_action(self, action):        
         
         # actions:
-        # 0 = decelerate | 1 = accelerate | 2 = left | 3 = right
+        # 0 = brake| 1 = left | 2 = right
+        
+        # always accelerate the car
+        self.accelerate(+1)  
         
         # decelerate the car
         if action[0]:
-            self.accelerate(-1)
-        
-        # accelerate the car
-        if action[1]:
-            self.accelerate(+1)
+            self.accelerate(-1)        
             
         # turn the car left
-        if action[2]:
+        if action[1]:
             self.turn(-1)
         
         # turn the car right
-        if action[3]:
+        if action[2]:
             self.turn(+1)   
         
         # update the car's current position
