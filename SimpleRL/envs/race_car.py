@@ -72,11 +72,10 @@ class race_car_env(environment_base):
             
         # run only tracks which are definitely well generated
         if use_selected_tracks:
-            safe_seeds = np.array([25027, 57447, 12855, 97307, 32899,
-                                   1944, 22906, 29030, 90129, 93030], dtype=np.int32)
+            np.random.seed(self.seed)              
+            safe_seeds = np.array([25027, 57447, 1944,
+                                   22906, 29030, 90129], dtype=np.int32)
             self.seed = np.random.choice(safe_seeds, 1)[0]
-            
-            print(self.seed)
         
         # Set environmetal parameters
         np.random.seed(self.seed)  
@@ -84,7 +83,7 @@ class race_car_env(environment_base):
         self.environment_name = 'Race_car'
         self.action_dim = 1
         self.action_num = np.array([3], dtype=np.int32)
-        self.state_dim = 6
+        self.state_dim = 7
         
         self.height, self.width = 600, 800
         self.track_width = 60 
@@ -178,7 +177,7 @@ class race_car_env(environment_base):
         done, info = self._check_collisions(sensor_points=self.sensor_points)
         
         # determine the reward
-        reward = self._process_reward(information=info)        
+        reward = self._process_reward()        
         
         # display the map
         if self.render: 
@@ -194,7 +193,7 @@ class race_car_env(environment_base):
             state = self._process_state()            
             return state, reward, done, info
         
-        elif self.driver_mode == "human":   
+        elif self.driver_mode == "human":            
             return done
         
     """
@@ -276,7 +275,7 @@ class race_car_env(environment_base):
     def _process_state(self):
         
         # get the car's speed
-        current_speed = self.car.speed             
+        current_speed, steering_angle = self.car.speed, self.car.steering_angle             
         
         # get the sensor collision points
         sensor_points = self.car.get_sensor_ranges(outside_track_points=self.outside_track_points, 
@@ -288,7 +287,7 @@ class race_car_env(environment_base):
         distances = [math.dist(self.car.position, sensor_point) for sensor_point in sensor_points]
                   
         # return the state of the environment                                          
-        return np.array(distances + [current_speed], dtype=np.float32) 
+        return np.array(distances + [current_speed, steering_angle], dtype=np.float32) 
     
     """
     Given the current sensor distances for the car, check if the car has crashed
@@ -334,24 +333,23 @@ class race_car_env(environment_base):
     """
     Calculate the agent reward using the outcome of the player action/
     """
-    def _process_reward(self, information):
+    def _process_reward(self):
         
-        # get the outcome
-        outcome = information["outcome"]
+        reward = 0
+        if len(self.checkpoint_edges) > 0:
         
-        # deduct reward for existing this turn
-        reward_total = -1
-        
-        # add reward based on outcome
-        if outcome:
-            if outcome == "lap":
-                reward_total += 1000            
-            elif outcome == "checkpoint":
-                reward_total += 100                
-            elif outcome == "crash":
-                reward_total -= 1000
-                
-        return reward_total
+            # get the car and checkpoit 
+            current_position, next_checkpoint = self.car.position, self.checkpoint_edges[0]
+            
+            # calculate the combined distance of the player form the edges
+            outside_edge = math.dist(current_position, next_checkpoint[0])
+            inside_edge = math.dist(current_position, next_checkpoint[1])
+            combined_dist = outside_edge + inside_edge
+            
+            # give higher reward the closer the car is to the next checkpoint
+            reward = 200 - min(combined_dist, 200)
+    
+        return reward
     
     def _init_display(self):
         
@@ -417,7 +415,7 @@ class race_car_env(environment_base):
 if __name__ == "__main__": 
         
     seed_range = 1
-    driver_mode = "human" # "default"
+    driver_mode = "default"
     render = True
     
     # track the player wins out of max
@@ -426,7 +424,7 @@ if __name__ == "__main__":
     for seed in range(seed_range):
     
         # intialise the environment
-        env = race_car_env(render=render, driver_mode=driver_mode, use_selected_tracks=True)
+        env = race_car_env(render=render, driver_mode=driver_mode, use_selected_tracks=True, seed=seed)
 
         # reset the state
         done, counter = False, 0
