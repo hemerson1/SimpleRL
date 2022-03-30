@@ -8,21 +8,28 @@ The following environments have currently been implemented:
 
 ### Laser Tag
 
+<img align="right" src="./example_images/laser_tag.gif" width="200">
+
 **File**: ```laser_tag.py```
-![](./example_images/laser_tag.gif)
-**Description**: A turn-based grid environment in which a selected agent competes against an enemy in the game of laser tag with the end goal to reduce the opposing player's lives to zero.
+
+**Description**: A turn-based grid environment in which a selected agent competes against an enemy in the game of laser tag with the end goal to reduce the opposing player's lives to zero. 
 
 ### Hospital
 
+<img align="right" src="./example_images/hospital.gif" width="200">
+
 **File**: ```hospital.py```
-![](./example_images/hospital.gif) 
+
 **Description**: A basic simulator of hospital management in which a selected agent must manage hospital staff to treat as many patients as possible in the allotted period.
 
 ### Race Car
 
-**File**: ```race_car.py```
-<img style="float: right;" width="250" alt="Race Car" src="./example_images/race_car.gif">
-**Description**: A simple racing game in which a selected agent must steer a car around a track without hitting the edges.
+<img align="right" src="./example_images/race_car.gif" width="200">
+
+**File**: ```race_car.py``` 
+
+**Description**: A simple racing game in which a selected agent must steer a car around a track without hitting the edges.</th>
+
 
 ## Installation
 
@@ -37,7 +44,7 @@ pip install SimpleRL
 Environments are deployed in a very similar way to OpenAI Gym environments (https://github.com/openai/gym). Here is an example of the "laser_tag" environment being used with random agent:
 
 ```python
-from SimpleRL.envs -import laser_tag_env
+from SimpleRL.envs import laser_tag_env
 
 # Import the environment
 env = laser_tag_env(render=True)
