@@ -6,21 +6,18 @@ Created on Thu Dec 16 21:30:44 2021
 @author: hemerson
 """
 
+"""
+Support functions for the hospital environment.
+"""
+
 import numpy as np
 
+"""
+creates a random patient for the hospital and assigns them an illness and 
+a probability of death. 
+"""
 def generate_patient(disease_classification, illness_likelihood, death_probs, recovery_time, id_number):
-    """
-    creates a random patient for the hospital and assigns them an illness and 
-    a probability of death
-    
-    Parameters:
-    ----------
-        
-    Return:
-    ------
-            
-    """
-       
+           
     # initialise the patients records
     patient_info = dict()
     
@@ -47,18 +44,11 @@ def generate_patient(disease_classification, illness_likelihood, death_probs, re
     
     return patient_info
 
-    
+"""
+Creates a random team of staff members for the hospital and each is randomly
+assigned the role of doctor or nurse. 
+"""    
 def generate_staff(staff_split, staff_efficiency, staff_roles, staff_number=10):
-    """
-    creates a random team of staff members for the hospital each with different roles
-    
-    Parameters:
-    ----------
-        
-    Return:
-    ------
-            
-    """
     
     staff_roster = []
     doctor_ids = []
@@ -95,6 +85,9 @@ def generate_staff(staff_split, staff_efficiency, staff_roles, staff_number=10):
     return staff_roster, doctor_ids
 
 
+"""
+Generate the default room set-up for the hopsital.
+"""
 def generate_rooms(number_rooms):
     
     # initialise the rooms

@@ -7,7 +7,7 @@ Created on Wed Dec 15 22:23:28 2021
 """
 
 """ 
-hopsital_env - a simple grid environment for managing a hospital
+A simple grid environment for managing a hospital
 
 The player has limited resources and is tasked with treating as many patients
 as possible during a set time window. Patients enter the hospital with one of
@@ -126,7 +126,10 @@ class hospital_env:
             self.orange = (255, 128, 0)
             self.light_orange = (199, 155, 123)
             self.sand_yellow = (188, 177, 140)
-        
+    
+    """
+    Resets the parameters of the learning environment
+    """  
     def reset(self):
         
         # reset the staff roster
@@ -153,7 +156,10 @@ class hospital_env:
         
         return state.flatten()
         
-        
+    
+    """
+    Updates the state of the environment following an action
+    """ 
     def step(self, action=None):
         
         """
@@ -361,6 +367,9 @@ class hospital_env:
             
         return state, reward, done, info     
     
+    """
+    Initialise the pygame display.
+    """
     def _init_display(self):
         
         # quit any previous games
@@ -377,7 +386,10 @@ class hospital_env:
         # create the screen
         self.screen = pygame.display.set_mode([self.window_width, self.window_height])
         
-        
+    
+    """
+    Update the pygame dispaly a single frame.
+    """    
     def _display(self):   
         
         # quit the game
@@ -534,7 +546,9 @@ class hospital_env:
         # update the frame rate
         self.clock.tick(self.fps)
         
-        
+    """
+    Close the pygame display.
+    """   
     def _close_display(self):
         
         # shut the display window

@@ -12,7 +12,7 @@ The following environments have currently been implemented:
 
 **File**: ```laser_tag.py```
 
-**Description**: A turn-based grid environment in which a selected agent competes against an enemy in the game of laser tag with the end goal to reduce the opposing player's lives to zero. 
+**Description**: A turn-based grid environment in which an agent competes against an enemy in the game of laser tag with the end goal to reduce the opposing player's lives to zero. 
 * State -  a flattened version of the grid environment with the positions of both players and the terrain.
 * Action - a player movement in a given direction followed by a shot in another specified direction.
 * Reward - given for every successful hit on the opponent.
@@ -24,9 +24,9 @@ The following environments have currently been implemented:
 **File**: ```hospital.py```
 
 **Description**: A basic simulator of hospital management in which a selected agent must manage hospital staff to treat as many patients as possible in the allotted period.
-* State -  the severity, days waiting and type of assistance required for each room with a patient in. 
+* State -  the severity, days waiting and type of assistance required for each patient room. 
 * Action - the room assignments of each staff member (doctors and nurses).
-* Reward - penalty is given when patients die or when they a left waiting for long periods.
+* Reward - penalty is given when patients die or when they are left waiting for long periods.
 
 ### Race Car
 

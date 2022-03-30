@@ -7,7 +7,11 @@ Created on Wed Dec 29 16:15:32 2021
 """
 
 """ 
-race_car_env - a race car track where the agent is timed for 1 lap.
+A race car track where the agent is timed for 1 lap.
+
+The player can choose to brake, steer left or steer right and the game 
+terminates when the car touches the perimeter. To complete a lap the
+car must pass through all the track checkpoints.
 
 """
 
@@ -127,8 +131,10 @@ class race_car_env(environment_base):
             self.grass_green = (58, 156, 53)            
             self.grey = (186, 182, 168)
             self.yellow = (255, 233, 0)
-            
     
+    """
+    Resets the parameters of the learning environment
+    """    
     def reset(self):
         
         # generate the new track points and checkpoints
@@ -144,8 +150,10 @@ class race_car_env(environment_base):
         # get the state
         if self.driver_mode == "default":
             return self._process_state()            
-        
-        
+    
+    """
+    Updates the state of the environment following an action
+    """        
     def step(self, player_action=None):
         
         # actions:
@@ -351,6 +359,9 @@ class race_car_env(environment_base):
     
         return reward
     
+    """
+    Initialise the pygame display.
+    """
     def _init_display(self):
         
         # quit any previous games
@@ -367,8 +378,10 @@ class race_car_env(environment_base):
         
         # create the screen
         self.screen = pygame.display.set_mode([self.window_width, self.window_height])
-        
-    
+     
+    """
+    Update the pygame dispaly a single frame.
+    """    
     def _display(self):   
         
         # quit the game
@@ -402,7 +415,11 @@ class race_car_env(environment_base):
         
         # update the frame rate
         self.clock.tick(self.fps)
+    
         
+    """
+    Close the pygame display.
+    """
     def _close_display(self):
         
         # shut the display window

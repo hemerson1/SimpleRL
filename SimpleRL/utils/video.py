@@ -6,12 +6,20 @@ Created on Sun Dec 19 18:02:25 2021
 @author: hemerson
 """
 
+"""
+Functions for converting the pygame display into .gif files.
+"""
+
 import imageio
 import os
 import pygame
 import datetime
 
 
+"""
+Initialise the folders required for converting pygame screen into
+videos/images.
+"""
 def init_video(environment_name):
     
     frame_count = 0     
@@ -33,6 +41,10 @@ def init_video(environment_name):
         
     return frame_count, image_folder, video_folder
 
+"""
+Save the screen as a image into a specified folder with a label corresponding 
+to the frame number
+"""
 def save_frames(screen, image_folder, frame_count):
     
     frame_count += 1
@@ -41,7 +53,9 @@ def save_frames(screen, image_folder, frame_count):
     
     return frame_count
 
-
+"""
+Unpack the directory of images and convert to a .gif file.
+"""
 def create_video(image_folder, video_folder, fps):
     
     # define the image directory

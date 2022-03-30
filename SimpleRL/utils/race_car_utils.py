@@ -6,6 +6,10 @@ Created on Wed Dec 29 16:39:19 2021
 @author: hemerson
 """
 
+"""
+Support functions for the race_car environment.
+"""
+
 import numpy as np
 import math
 import pygame 
@@ -655,8 +659,10 @@ def draw_rectangle(dimensions, color, line_thickness=1, fill=False):
     
     return rect_surf 
 
-# Updating the car ----------------------------------------------------------
 
+"""
+Create an object for monitoring and updating the simulated car.
+"""
 class simulate_car:
     
     def __init__(self, fps=30, starting_position=(0, 0), starting_angle=0):
@@ -901,7 +907,7 @@ class simulate_car:
         return sensor_points
 
     """
-    Get the lines of the sensors 
+    Get the lines of the sensors.
     """                    
     def get_sensor_lines(self, track_points, sensor_angles):
         
@@ -935,7 +941,9 @@ class simulate_car:
         
         return x_lines, track_x, common_y
                     
-                    
+    """
+    Get the distance of a single sensor of specified angle.
+    """
     def get_single_sensor_range(self, track_points, transition_idx, x_lines, track_x, common_y, sensor_angle, idx=0):        
         
         # get the adjusted angle

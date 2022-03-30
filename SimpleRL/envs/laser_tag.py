@@ -7,7 +7,7 @@ Created on Sun Oct 31 21:57:14 2021
 """
 
 """ 
-laser_tag_env - a simple grid environment for 1 vs 1 laser tag 
+A simple grid environment for 1 vs 1 laser tag 
 
 Players can perform an shot and a movement each turn which are limited to either:
 up, down, left or right. A player loses a life if they are shot by their opponent,
@@ -148,6 +148,9 @@ class laser_tag_env(environment_base):
             self.red = (255, 51, 51)
             self.black = (0, 0, 0)          
     
+    """
+    Resets the parameters of the learning environment
+    """  
     def reset(self):
         
         # reset the map parameters
@@ -162,7 +165,10 @@ class laser_tag_env(environment_base):
                 )
         
         return self.grid_map.flatten()
-        
+    
+    """
+    Updates the state of the environment following an action
+    """     
     def step(self, player_action=None):
         
         # check the action input is valid (i.e. np.int32 of valid range)        
@@ -196,9 +202,15 @@ class laser_tag_env(environment_base):
                  
         return self.grid_map.flatten(), reward, done, info
     
+    """
+    Get a random action from the environment.
+    """
     def sample_discrete_action(self):
         return np.random.randint(self.action_num - 1, size=self.action_dim)
     
+    """
+    Update the stored map for a specified action.
+    """    
     def _update_grid(self, action):
         
         # 25 actions --------        
@@ -291,6 +303,10 @@ class laser_tag_env(environment_base):
                 
         return reward, done, info    
     
+    """
+    Determine whether a bullet will hit a person, terrain point or miss
+    completely.
+    """
     def _get_shot_trajectory(self, chosen_move, current_player_pos, grid_map, current_player):
                 
         # get the player value
@@ -337,6 +353,9 @@ class laser_tag_env(environment_base):
             
         return reward, done, info
     
+    """
+    Determine if a move falls with the grid environment.
+    """
     def _is_move_valid(self, final_player_pos, grid_map):   
         
         # assign the new player position
@@ -351,6 +370,11 @@ class laser_tag_env(environment_base):
                 
         return False     
     
+    """
+    Use Dijkstra's algorithm to find the shortest path between the player and 
+    the enemy player. Then move into a position that stops the enemy player
+    from being shot. 
+    """
     def _get_computer_action(self):
         
         # select a random action in the case the agent difficulty is set
@@ -539,8 +563,10 @@ class laser_tag_env(environment_base):
         
         elif self.action_mode == "default":
             return np.array([move_action, 0], dtype=np.int32)
-
-            
+    
+    """
+    Initialise the pygame display.
+    """        
     def _init_display(self):
         
         # quit any previous games
@@ -557,7 +583,9 @@ class laser_tag_env(environment_base):
         # create the screen
         self.screen = pygame.display.set_mode([self.window_width, self.window_height])
         
-    
+    """
+    Update the pygame dispaly a single frame.
+    """
     def _display(self):   
         
         # quit the game
@@ -627,7 +655,10 @@ class laser_tag_env(environment_base):
         
         # update the frame rate
         self.clock.tick(self.fps)
-        
+    
+    """
+    Close the pygame display.
+    """  
     def _close_display(self):
         
         # shut the display window
