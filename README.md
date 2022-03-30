@@ -21,7 +21,7 @@ The following environments have currently been implemented:
 ### Race Car
 
 **File**: ```race_car.py```
-![](./example_images/race_car.gif) 
+<img style="float: right;" width="250" alt="Race Car" src="./example_images/race_car.gif">
 **Description**: A simple racing game in which a selected agent must steer a car around a track without hitting the edges.
 
 ## Installation
