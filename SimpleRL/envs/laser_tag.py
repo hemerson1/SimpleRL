@@ -640,10 +640,11 @@ class laser_tag_env(environment_base):
         
 if __name__ == "__main__": 
         
-    seed_range = 10
+    seed_range = 1
     enemy_mode = "default"
     difficulty = "hard"
     action_mode = "default"
+    render_mode = "video"        
     
     # track the player wins out of max
     total_reward = 0
@@ -655,6 +656,7 @@ if __name__ == "__main__":
                             render=True,
                             action_mode=action_mode,
                             enemy_mode=enemy_mode,
+                            render_mode=render_mode,
                             difficulty=difficulty,
                             lives=3)
         

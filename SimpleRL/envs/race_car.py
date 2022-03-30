@@ -415,8 +415,9 @@ class race_car_env(environment_base):
 if __name__ == "__main__": 
         
     seed_range = 1
-    driver_mode = "default"
+    driver_mode = "human"
     render = True
+    render_mode = "video"
     
     # track the player wins out of max
     total_reward = 0        
@@ -424,7 +425,13 @@ if __name__ == "__main__":
     for seed in range(seed_range):
     
         # intialise the environment
-        env = race_car_env(render=render, driver_mode=driver_mode, use_selected_tracks=True, seed=seed)
+        env = race_car_env(
+            render=render, 
+            driver_mode=driver_mode,
+            use_selected_tracks=True,
+            seed=seed, 
+            render_mode=render_mode
+            )
 
         # reset the state
         done, counter = False, 0

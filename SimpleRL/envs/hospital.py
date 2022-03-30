@@ -552,6 +552,7 @@ if __name__ == "__main__":
     staff_number = 10
     seeds = 1
     render = True
+    render_mode = "default"
     
     # print logging
     display = False
@@ -559,9 +560,12 @@ if __name__ == "__main__":
     for seed in range(seeds):
     
         # initialise the environment
-        env = hospital_env(render=render,
-                           seed=seed,
-                           max_timestep=test_days)
+        env = hospital_env(
+            render=render,
+            seed=seed,
+            render_mode=render_mode,
+            max_timestep=test_days
+            )
         
         for days in range(test_days):
         
